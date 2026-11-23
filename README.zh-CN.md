@@ -1,20 +1,22 @@
 <div align="center">
 
-# AgentIsland
+<h1>AgentIsland</h1>
 
-**面向 AI 编程时代的 Windows 11 原生灵动岛（80 KB 零 Electron · 注意力分级雷达 · 护腰跟练）**
+<p><strong>面向 AI 编程时代的 Windows 11 原生灵动岛（80 KB 零 Electron · 注意力分级雷达 · 护腰跟练）</strong></p>
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+<p><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a></p>
 
-[![Platform](https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland)
-[![Size](https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
-[![Zero Electron](https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square)](#核心工程亮点)
-[![Verified](https://img.shields.io/badge/自动化自检-41%2F41%20全绿-10b981?style=flat-square)](#注意力分级与交互流程)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+<p>
+  <a href="https://github.com/Cooper-X-Oak/AgentIsland"><img src="https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square" alt="Platform" /></a>
+  <a href="https://github.com/Cooper-X-Oak/AgentIsland/releases"><img src="https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square" alt="Size" /></a>
+  <a href="#核心工程亮点"><img src="https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square" alt="Zero Electron" /></a>
+  <a href="#注意力分级与交互流程"><img src="https://img.shields.io/static/v1?label=%E8%87%AA%E5%8A%A8%E5%8C%96%E8%87%AA%E6%A3%80&message=41/41+%E5%85%A8%E7%BB%BF&color=10b981&style=flat-square" alt="Verified" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT" /></a>
+</p>
 
-<br />
-
-<img src="docs/preview.png" alt="AgentIsland Split Pill 双岛、审批雷达、跟练倒计时与 4x 抗锯齿显微镜" width="100%" />
+<p>
+  <img src="docs/preview.png" alt="AgentIsland Split Pill 双岛、审批雷达、跟练倒计时与 4x 抗锯齿显微镜" width="100%" />
+</p>
 
 </div>
 

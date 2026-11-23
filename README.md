@@ -1,20 +1,22 @@
 <div align="center">
 
-# AgentIsland
+<h1>AgentIsland</h1>
 
-**A 80 KB Native Windows 11 Dynamic Island for AI Coding Agents & Posture Coach**
+<p><strong>An 80 KB Native Windows 11 Dynamic Island for AI Coding Agents &amp; Posture Coach</strong></p>
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+<p><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a></p>
 
-[![Platform](https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland)
-[![Size](https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
-[![Zero Electron](https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square)](#highlights)
-[![Verified](https://img.shields.io/badge/Self--Tests-41%2F41%20Pass-10b981?style=flat-square)](#architecture--verification)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+<p>
+  <a href="https://github.com/Cooper-X-Oak/AgentIsland"><img src="https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square" alt="Platform" /></a>
+  <a href="https://github.com/Cooper-X-Oak/AgentIsland/releases"><img src="https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square" alt="Size" /></a>
+  <a href="#highlights"><img src="https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square" alt="Zero Electron" /></a>
+  <a href="#architecture--verification"><img src="https://img.shields.io/static/v1?label=Self-Tests&message=41/41+Pass&color=10b981&style=flat-square" alt="Verified" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT" /></a>
+</p>
 
-<br />
-
-<img src="docs/preview.png" alt="AgentIsland Split Pill, Approval Radar, Countdown & 4x Anti-Aliasing Microscope" width="100%" />
+<p>
+  <img src="docs/preview.png" alt="AgentIsland Split Pill, Approval Radar, Countdown &amp; 4x Anti-Aliasing Microscope" width="100%" />
+</p>
 
 </div>
 
