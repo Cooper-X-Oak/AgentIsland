@@ -80,7 +80,7 @@ Running **10 Antigravity + 10 Claude Code + 10 Codex** agents at once? AgentIsla
 ## Quick Start (30 Seconds)
 
 ### Option A: Portable Release (Recommended, No Build Needed)
-1. Download `AgentIsland-v0.1.0-win-x64.zip` from [Releases](https://github.com/Cooper-X-Oak/AgentIsland/releases) and extract it.
+1. Download `AgentIsland-v0.1.1-win-x64.zip` from [Releases](https://github.com/Cooper-X-Oak/AgentIsland/releases) and extract it.
 2. Double-click `bin\AgentIsland.exe` (or run `.\install-autostart.ps1` to add Start Menu & Windows Startup shortcuts).
 
 ### Option B: Build from Source (Zero SDK Install!)
@@ -126,16 +126,7 @@ Test both alerts immediately:
 
 ## Architecture & Verification
 
-```text
-AI Terminals (Antigravity / Claude Code / Codex / CLI)
-   └── island-hook.exe / island-push.exe  ──► %LOCALAPPDATA%\AgentIsland\inbox\*.json
-                                                      │ (FileSystemWatcher)
-Win32 GetLastInputInfo + Lock Detection ──────────────┼──► AgentIsland.exe (80 KB C# Host)
-                                                      │     ├── Approval Radar (transcript tail)
-                                                      │     ├── WS_EX_NOREDIRECTIONBITMAP + dcomp.dll
-                                                      │     ├── Dynamic WS_EX_TRANSPARENT Click-Through
-                                                      │     └── CoreWebView2CompositionController ──► ui/index.html
-```
+<img src="docs/architecture-flow-en.svg" alt="AgentIsland End-to-End Native Architecture &amp; Zero-Port Event Pipeline" width="100%" />
 
 Run the automated full-stack verification suite anytime:
 ```powershell

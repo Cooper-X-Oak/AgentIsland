@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 352" width="920" height="352" role="img" aria-label="AgentIsland End-to-End Architecture &amp; Zero-Port Event Pipeline">
+  <defs>
+    <marker id="arr-p" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#60a5fa" />
+    </marker>
+    <marker id="arr-s" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#4ade80" />
+    </marker>
+    <marker id="arr-w" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#f59e0b" />
+    </marker>
+    <marker id="arr-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#8b949e" />
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+  </style>
+
+  <!-- Outer Dark Card Frame (clean on both GitHub Light & Dark themes) -->
+  <rect x="0" y="0" width="920" height="352" rx="16" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+
+  <!-- Header -->
+  <text x="20" y="27" font-size="13" font-weight="700" fill="#f0f6fc">AgentIsland — End-to-End Native Architecture &amp; Zero-Port Event Pipeline</text>
+  <rect x="748" y="13" width="152" height="20" rx="10" fill="rgba(96,165,250,0.14)" stroke="rgba(96,165,250,0.45)" stroke-width="1" />
+  <text x="824" y="26.5" font-size="10" font-weight="700" fill="#60a5fa" text-anchor="middle">ZERO ELECTRON · 45/45</text>
+
+  <!-- 3 Swimlanes -->
+  <rect x="14" y="44" width="276" height="294" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="26" y="63" font-size="10" font-weight="700" fill="#8b949e" letter-spacing="0.4">01 · SIGNAL SOURCES &amp; ADAPTERS</text>
+
+  <rect x="310" y="44" width="300" height="294" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="322" y="63" font-size="10" font-weight="700" fill="#8b949e" letter-spacing="0.4">02 · ZERO-PORT BUS &amp; C# NATIVE HOST</text>
+
+  <rect x="630" y="44" width="276" height="294" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="642" y="63" font-size="10" font-weight="700" fill="#8b949e" letter-spacing="0.4">03 · SPLIT PILL UI &amp; ACTION LOOP</text>
+
+  <!-- Bezier Connectors (Col 1 -> Col 2) -->
+  <path d="M280,114 C299,114 299,106 318,106" fill="none" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arr-p)" />
+  <path d="M280,200 C301,200 301,122 318,122" fill="none" stroke="#8b949e" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arr-m)" />
+  <path d="M280,286 C301,286 301,264 318,264" fill="none" stroke="#4ade80" stroke-width="1.4" marker-end="url(#arr-s)" />
+
+  <!-- Internal vertical connector (Inbox -> Host) -->
+  <path d="M460,152 L460,164" fill="none" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arr-p)" />
+
+  <!-- Bezier Connectors (Col 2 -> Col 3) -->
+  <path d="M600,206 C620,206 620,120 638,120" fill="none" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arr-p)" />
+  <path d="M600,248 C620,248 620,214 638,214" fill="none" stroke="#4ade80" stroke-width="1.5" marker-end="url(#arr-s)" />
+  <path d="M600,294 C620,294 620,294 638,294" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr-w)" />
+
+  <!-- Column 1 Cards -->
+  <rect x="24" y="74" width="256" height="82" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.6)" stroke-width="1.3" />
+  <text x="34" y="93" font-size="11.5" font-weight="700" fill="#f0f6fc">AI Terminal Native Hooks</text>
+  <text x="34" y="110" font-size="10" fill="#8b949e">• Antigravity / Claude Code / Codex CLI</text>
+  <text x="34" y="125" font-size="10" fill="#8b949e">• island-hook.exe extracts real title + reply</text>
+  <text x="34" y="142" font-size="9.5" font-weight="600" fill="#60a5fa">✓ Empty stdout on CC/Codex (safe exit 0)</text>
+
+  <rect x="24" y="166" width="256" height="68" rx="10" fill="#0d1117" stroke="#30363d" stroke-width="1.2" />
+  <text x="34" y="185" font-size="11.5" font-weight="700" fill="#f0f6fc">Universal CLI &amp; Script Push</text>
+  <text x="34" y="202" font-size="10" fill="#8b949e">• island-push.exe --source --title --body</text>
+  <text x="34" y="218" font-size="10" fill="#8b949e">• Or drop atomic JSON into inbox directly</text>
+
+  <rect x="24" y="244" width="256" height="82" rx="10" fill="#0d1117" stroke="rgba(74,222,128,0.55)" stroke-width="1.3" />
+  <text x="34" y="263" font-size="11.5" font-weight="700" fill="#f0f6fc">Win32 Seated &amp; Lock Sensor</text>
+  <text x="34" y="280" font-size="10" fill="#8b949e">• GetLastInputInfo real active-time clock</text>
+  <text x="34" y="295" font-size="10" fill="#8b949e">• Lock screen / idle ≥ 5 min resets timer</text>
+  <text x="34" y="312" font-size="9.5" font-weight="600" fill="#4ade80">✓ External bilingual config/actions.json</text>
+
+  <!-- Column 2 Cards -->
+  <rect x="320" y="74" width="280" height="78" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.6)" stroke-width="1.3" />
+  <text x="332" y="93" font-size="11.5" font-weight="700" fill="#f0f6fc">Atomic File Inbox (Zero Open Ports)</text>
+  <text x="332" y="110" font-size="10" fill="#8b949e">• %LOCALAPPDATA%\AgentIsland\inbox\*.json</text>
+  <text x="332" y="125" font-size="10" fill="#8b949e">• 64 KB FileSystemWatcher + 80ms coalescing</text>
+  <text x="332" y="141" font-size="9.5" font-weight="600" fill="#4ade80">✓ 30-agent burst ingested in 84–154ms (0 drop)</text>
+
+  <rect x="320" y="166" width="280" height="160" rx="10" fill="#0d1117" stroke="rgba(245,158,11,0.65)" stroke-width="1.4" />
+  <text x="332" y="185" font-size="11.5" font-weight="700" fill="#f0f6fc">AgentIsland.exe (Native C# Host)</text>
+  <text x="332" y="204" font-size="10" fill="#8b949e">• DirectComposition (dcomp.dll) + NoRedir</text>
+  <text x="332" y="220" font-size="10" fill="#8b949e">• WebView2 CompositionController (520×290)</text>
+  <text x="332" y="236" font-size="10" fill="#8b949e">• 30ms dynamic WS_EX_TRANSPARENT hit-test</text>
+  <text x="332" y="252" font-size="10" fill="#8b949e">• Approval Radar &amp; mtime zero-read cache</text>
+  <text x="332" y="268" font-size="10" fill="#8b949e">• Auto-read clear via last_user_view_time</text>
+  <text x="332" y="284" font-size="10" fill="#8b949e">• Yields Z-order to Snipping Tool overlays</text>
+  <text x="332" y="308" font-size="9.5" font-weight="600" fill="#fbbf24">✓ edgeMaxA = 0 · 0 px morph jump · Auto/中/EN</text>
+
+  <!-- Column 3 Cards -->
+  <rect x="640" y="74" width="256" height="90" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.65)" stroke-width="1.4" />
+  <text x="652" y="93" font-size="11.5" font-weight="700" fill="#f0f6fc">Left Pill · Pure Agent Plane</text>
+  <text x="652" y="110" font-size="10" fill="#8b949e">• 78px idle · Minimal brand SVG glyphs</text>
+  <text x="652" y="125" font-size="10" fill="#8b949e">• 4-tier L0–L3 escalation &amp; 3.5s ticker</text>
+  <text x="652" y="140" font-size="10" fill="#8b949e">• Fleet Mode (&gt;5) + Brand filter chips</text>
+  <text x="652" y="155" font-size="9.5" font-weight="600" fill="#60a5fa">✓ Dedicated Agent right-click menu</text>
+
+  <rect x="640" y="174" width="256" height="74" rx="10" fill="#0d1117" stroke="rgba(74,222,128,0.6)" stroke-width="1.3" />
+  <text x="652" y="193" font-size="11.5" font-weight="700" fill="#f0f6fc">Right Ring · Posture &amp; Timer</text>
+  <text x="652" y="210" font-size="10" fill="#8b949e">• 30/45/50/60m chips + Pause 1h + Streak</text>
+  <text x="652" y="225" font-size="10" fill="#8b949e">• Guided countdown with true pause/resume</text>
+  <text x="652" y="240" font-size="9.5" font-weight="600" fill="#4ade80">✓ Zero-bounce hover · Protected from AI</text>
+
+  <rect x="640" y="258" width="256" height="68" rx="10" fill="#0d1117" stroke="rgba(245,158,11,0.65)" stroke-width="1.3" />
+  <text x="652" y="277" font-size="11.5" font-weight="700" fill="#f0f6fc">Zero-Flicker Session Jump</text>
+  <text x="652" y="294" font-size="10" fill="#8b949e">• IsIconic guard (no maximized resize flash)</text>
+  <text x="652" y="310" font-size="10" fill="#fbbf24">• Real title Ctrl+K jump (blocks placeholders)</text>
+</svg>

@@ -80,7 +80,7 @@
 ## 30 秒上手
 
 ### 方式一：下载免编译便携包（推荐）
-1. 在 [Releases](https://github.com/Cooper-X-Oak/AgentIsland/releases) 下载 `AgentIsland-v0.1.0-win-x64.zip` 解压。
+1. 在 [Releases](https://github.com/Cooper-X-Oak/AgentIsland/releases) 下载 `AgentIsland-v0.1.1-win-x64.zip` 解压。
 2. 双击 `bin\AgentIsland.exe` 运行（运行 `.\install-autostart.ps1` 可一键添加开始菜单与开机自启）。
 
 ### 方式二：源码编译（零 SDK 安装）
@@ -121,6 +121,17 @@ cd AgentIsland
 * **新增/修改护腰与微运动动作**：直接编辑 [`config/actions.json`](config/actions.json)（可自由添加颈椎操、护眼、俯卧撑及倒计时秒数）。
 * **改前端样式与动效**：直接编辑 [`ui/index.html`](ui/index.html)。
 * 右键系统托盘图标 → **热重载前端与动作库**，零编译立即生效。
+
+---
+
+## 架构原理与全栈自测
+
+<img src="docs/architecture-flow-zh.svg" alt="AgentIsland 端到端原生架构与无端口事件总线流程图" width="100%" />
+
+随时运行 45 项全栈自动化验证（Hook 契约 + 30 Agent 压测 + DirectComposition + 穿透与像素边缘检测）：
+```powershell
+.\verify.ps1 -Rebuild
+```
 
 ---
 
