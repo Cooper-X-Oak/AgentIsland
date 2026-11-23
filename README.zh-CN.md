@@ -10,7 +10,7 @@
   <a href="https://github.com/Cooper-X-Oak/AgentIsland"><img src="https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square" alt="Platform" /></a>
   <a href="https://github.com/Cooper-X-Oak/AgentIsland/releases"><img src="https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square" alt="Size" /></a>
   <a href="#核心工程亮点"><img src="https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square" alt="Zero Electron" /></a>
-  <a href="#注意力分级与交互流程"><img src="https://img.shields.io/static/v1?label=%E8%87%AA%E5%8A%A8%E5%8C%96%E8%87%AA%E6%A3%80&message=41/41+%E5%85%A8%E7%BB%BF&color=10b981&style=flat-square" alt="Verified" /></a>
+  <a href="#注意力分级与交互流程"><img src="https://img.shields.io/static/v1?label=%E8%87%AA%E5%8A%A8%E5%8C%96%E8%87%AA%E6%A3%80&message=45/45+%E5%85%A8%E7%BB%BF&color=10b981&style=flat-square" alt="Verified" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT" /></a>
 </p>
 
@@ -29,9 +29,9 @@
 1. **Agent 悄悄卡住干等**：切去浏览器或另一个项目干活，15 分钟后切回来才发现 Agent 早就停在「权限审批」或「等你拍板」弹窗上白等了。
 2. **老腰快坐废了**：一进心流连续 3 小时焊在椅子上，根本记不起站起来深蹲或拉伸。
 
-**AgentIsland** 以苹果式 **Split Pill（双岛并行）** 形态常驻在 Windows 11 屏幕正顶部：
-* **左侧主药丸（AI 终端雷达）**：实时显示 Agent 思考状态，毫秒级弹出「待批准命令 / 等你拍板 / 等你回复 / 报错卡住」，标注已等待时长、保留最近 5 条已看历史，支持一键直达 Antigravity 对应会话。
-* **右侧独立小圆环（护腰节拍器）**：通过 Win32 `GetLastInputInfo` + 锁屏检测累计真实坐姿时长（离席 ≥ 5 分钟或锁屏自动清零），满周期展开护腰行动卡，内置 **30s–120s 跟练倒计时进度条** 与今日救腰打卡统计。
+**AgentIsland** 以职责严格解耦的苹果式 **Split Pill（双岛并行）** 形态常驻在 Windows 11 屏幕正顶部：
+* **左侧主胶囊（纯净 Agent Plane）**：极简品牌矢量徽标（`78–232 px`）、四级注意力分级、真实会话名与决策级 AI 摘要、30+ 并发舰队聚合与品牌快筛、一键直达会话；右键专管 Agent 静音与 `自动 / 中 / EN` 语言切换，绝不混入护腰杂项。
+* **右侧独立小圆环（专属计时 & 护腰空间）**：通过 Win32 `GetLastInputInfo` + 锁屏检测累计真实坐姿时长（离席 ≥ 5 分钟或锁屏自动清零）；悬浮、点击或右键圆环均可独立控制间隔（`30/45/50/60m`）、`30s–120s` 真暂停/继续跟练、暂停 1h 与今日打卡。
 
 ---
 
@@ -47,9 +47,9 @@
   * **去臃肿化品牌矢量符号**（`112–196 px` 极简胶囊）：用 Antigravity / Claude / Codex / CLI 专属 14×14 矢量符号 + 动态 3 条波形替代冗长的文字状态前缀；
   * **一眼决策内容**：读取真实会话标题（`annotations/*.pbtxt`），直接提炼 AI 实际提问或结论，彻底告别复读用户自己输入；
   * **四级分级 + 自动退场**：过滤后台任务导致的伪停止（`fullyIdle: false`），普通回复（L1）绝不弹大卡、只在收缩胶囊内每 3.5 秒轮播 `1/N`；拍板/报错（L2）8 秒自动缩回，权限审批（L3）30 秒未处理也自动缩回醒目脉冲胶囊；切入原会话自动已读消隐；
-  * **低摩擦零误触交互**：仅在有待介入消息时 Hover 260ms 展开当前轮播条目（空闲路过绝不误弹总览挡标签）；右键菜单点击外部桌面即关；`Alt + \` 随时展收，`Alt + Shift + \` 一键直达最新待介入会话。
+  * **物理双岛解耦 + 系统语言自适应（`自动 / 中 / EN`）**：启动自动匹配 Windows 系统语言，右键菜单一键 0ms 切换中英文与双语动作库；悬浮 `320ms` 按左右区域分别展开 Agent Plane 或计时护腰卡，点击外部桌面瞬间收起；`Alt + \` 随时展收，`Alt + Shift + \` 一键直达最新待介入会话。
 * **开放零端口通知总线**：任何终端、脚本、CI 只要调用 `bin\island-push.exe` 或向 `%LOCALAPPDATA%\AgentIsland\inbox\` 写入 JSON 即可秒级上岛。
-* **自带 41 项全视自检套件**：一行 `.\verify.ps1 -Rebuild` 自动验 Hook 契约、决策摘要、伪停止过滤、UX 状态机回归、DirectComposition、真实垫底窗 `WindowFromPoint` 穿透、5 态外缘 `Alpha = 0`、0 闪身并生成 4× 抗锯齿显微镜拼图。
+* **自带 45 项全视自检套件**：一行 `.\verify.ps1 -Rebuild` 自动验 Hook 契约、决策摘要、伪停止过滤、30 并发暴力压测、UX 状态机回归、DirectComposition、真实垫底窗 `WindowFromPoint` 穿透、5 态外缘 `Alpha = 0`、0 闪身并生成 4× 抗锯齿显微镜拼图。
 
 ---
 
@@ -58,6 +58,18 @@
 不是每一条 AI 动态都配得上强占屏幕打断你的心流。AgentIsland 先拦截「中途停一下又继续」的伪通知，再按阻塞程度分流到 **L0–L3 四个级别**，让顶部始终克制清爽：
 
 <img src="docs/attention-tiers-zh.svg" alt="AgentIsland 四级注意力分级、胶囊轮播与自动退场流程图" width="100%" />
+
+---
+
+## 30 并发多 Agent 舰队模式（实测零丢包）
+
+同时开 **10 个 Antigravity + 10 个 Claude Code + 10 个 Codex** 狂跑怎么办？超过 5 个并发时胶囊自动切入 **Fleet 品牌聚合仪**，展开 `Agent Plane` 后自动解锁**按品牌一键快筛 + 丝滑滚轮列表**：
+
+<div align="center">
+  <img src="docs/fleet-30-agents.png" alt="AgentIsland 30 并发多 Agent 舰队模式与品牌筛选实测截图" width="540" />
+</div>
+
+* **真实 30 并发暴力压测已通过**：`30/30` 并发事件 **`143 ms` 全量吞入零丢包**（`64 KB` Watcher 缓冲 + `80 ms` 突发合批防抖 + `2.5s` 声音节流 + `mtime` 零读缓存 + `80` 会话容量保护）。
 
 ---
 

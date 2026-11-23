@@ -10,7 +10,7 @@
   <a href="https://github.com/Cooper-X-Oak/AgentIsland"><img src="https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square" alt="Platform" /></a>
   <a href="https://github.com/Cooper-X-Oak/AgentIsland/releases"><img src="https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square" alt="Size" /></a>
   <a href="#highlights"><img src="https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square" alt="Zero Electron" /></a>
-  <a href="#architecture--verification"><img src="https://img.shields.io/static/v1?label=Self-Tests&message=41/41+Pass&color=10b981&style=flat-square" alt="Verified" /></a>
+  <a href="#architecture--verification"><img src="https://img.shields.io/static/v1?label=Self-Tests&message=45/45+Pass&color=10b981&style=flat-square" alt="Verified" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT" /></a>
 </p>
 
@@ -29,9 +29,9 @@ If you run multiple AI coding agents (**Antigravity, Claude Code, Codex CLI, Cur
 1. **Silent Agent Stalls**: You switch to your browser or another repo while an agent works — only to come back 15 minutes later and find it stuck waiting on an approval dialog or a question card.
 2. **Lower-Back Destruction**: Deep flow means sitting for 3 hours straight without standing up once.
 
-**AgentIsland** sits quietly at the top-center of your Windows 11 screen as an Apple-style **Split Pill**:
-* **Left Pill — AI Agent Radar**: Live status of running agents, instant alerts for approvals / decisions / replies / errors, wait-time counter, recent history, and one-click jump straight back to the exact Antigravity conversation.
-* **Right Ring — Posture & Break Coach**: Tracks real keyboard/mouse seated time via Win32 `GetLastInputInfo` (auto-resets if you lock your PC or step away ≥ 5 min), then expands with a guided countdown timer (`30s–120s`) and daily streak counter.
+**AgentIsland** sits quietly at the top-center of your Windows 11 screen as a strictly decoupled Apple-style **Split Pill**:
+* **Left Pill — Pure Agent Plane**: Minimal brand SVG glyphs (`78–232 px`), 4-tier notification attention flow, real conversation titles & decision-grade AI summaries, Fleet Mode brand aggregation (`30+` concurrent agents), and one-click jump back to the exact session. Right-click for pure Agent controls (Clear All, Mute, `Auto / 中 / EN` language).
+* **Right Ring — Dedicated Posture & Timer Space**: Tracks real keyboard/mouse seated time via Win32 `GetLastInputInfo` (auto-resets if you lock your PC or step away ≥ 5 min). Hover, click, or right-click the ring for interval chips (`30/45/50/60m`), guided countdown (`30s–120s` with true pause/resume), pause 1h, and daily streak — zero clutter in your Agent Plane.
 
 ---
 
@@ -47,9 +47,9 @@ If you run multiple AI coding agents (**Antigravity, Claude Code, Codex CLI, Cur
   * **Minimal Brand SVG Glyphs** (`112–196 px` compact pill): Crisp vector symbols for Antigravity, Claude Code, Codex, and CLI + 3-bar live wave instead of bloated status text.
   * **Decision-Grade Summaries**: Shows the **real conversation title** (from Antigravity `annotations/*.pbtxt`) and distills what the AI actually asked or concluded — never echoes your own prompt back at you.
   * **4-Tier Notification Escalation & Auto-Collapse**: Filters false mid-turn stops (`fullyIdle: false`), keeps L1 replies quietly rotating in the capsule ticker (`1/N` every 3.5s), auto-collapses L2 toasts in 8s and L3 approvals in 30s, and auto-clears alerts once you switch into that session.
-  * **Zero-Accident Hover & Shortcuts**: Hover (260ms) previews the currently ticked alert without popping an overview over browser tabs when idle; right-click anywhere on the pill/ring for inline quick actions (closes on outside desktop click); `Alt + \` toggles, `Alt + Shift + \` jumps directly to the latest waiting session.
+  * **Decoupled Split Pill UX & Bilingual (`Auto / 中 / EN`)**: Auto-detects Windows UI language with instant toggle in the right-click menu; hover (`320ms`) expands each side into its own dedicated panel; clicking anywhere outside collapses immediately; `Alt + \` toggles, `Alt + Shift + \` jumps directly to the latest waiting session.
 * **Open, Zero-Port Event Bus**: Drop atomic JSON into `%LOCALAPPDATA%\AgentIsland\inbox\` or call `bin\island-push.exe` from any AI terminal, build script, or CI hook.
-* **Built-in 41-Point Self-Verification Suite**: Run `.\verify.ps1 -Rebuild` to verify Hook contracts, decision summaries, false-stop filtering, UX state-machine regressions, DirectComposition HRESULTs, real `WindowFromPoint` click-through, per-pixel edge alpha, and generate a 4× anti-aliasing microscope sheet automatically.
+* **Built-in 45-Point Self-Verification Suite**: Run `.\verify.ps1 -Rebuild` to verify Hook contracts, decision summaries, false-stop filtering, 30-agent burst ingestion, UX state-machine regressions, DirectComposition HRESULTs, real `WindowFromPoint` click-through, per-pixel edge alpha, and generate a 4× anti-aliasing microscope sheet automatically.
 
 ---
 
@@ -58,6 +58,18 @@ If you run multiple AI coding agents (**Antigravity, Claude Code, Codex CLI, Cur
 Not every AI event deserves to interrupt your flow. AgentIsland filters background mid-turn pauses and routes events across **4 attention tiers (`L0`–`L3`)** so your top bar stays calm:
 
 <img src="docs/attention-tiers-en.svg" alt="AgentIsland 4-Tier Notification Attention Economy & Auto-Collapse Pipeline" width="100%" />
+
+---
+
+## Built for 30+ Concurrent Agents (Fleet Mode)
+
+Running **10 Antigravity + 10 Claude Code + 10 Codex** agents at once? AgentIsland automatically switches to **Fleet Mode** — aggregating counts by brand glyph in the compact pill and unlocking instant brand filter chips + smooth scrolling inside the Agent Plane:
+
+<div align="center">
+  <img src="docs/fleet-30-agents.png" alt="AgentIsland 30 Concurrent Agents Fleet Mode & Brand Filter Stress Test" width="540" />
+</div>
+
+* **Verified 30-Agent Burst Stress Test**: `30/30` concurrent events ingested in **143 ms** with **0 drops** (`64 KB` `FileSystemWatcher` buffer + `80 ms` burst coalescing + `2.5s` audio cooldown + file `mtime` zero-read caching + `80`-session cap).
 
 ---
 
