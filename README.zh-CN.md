@@ -1,5 +1,9 @@
 <div align="center">
 
+<p>
+  <img src="assets/logo.svg" alt="AgentIsland Logo" width="84" height="84" />
+</p>
+
 <h1>AgentIsland</h1>
 
 <p><strong>面向 AI 编程时代的 Windows 11 原生灵动岛（80 KB 零 Electron · 注意力分级雷达 · 护腰跟练）</strong></p>

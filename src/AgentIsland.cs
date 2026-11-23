@@ -490,6 +490,7 @@ namespace AgentIsland
             Log("Init AgentIsland | actions=" + _actions.Count + " | selfTest=" + (!string.IsNullOrEmpty(_selfTestDir)));
 
             this.Text = "AgentIsland";
+            this.Icon = LoadAppIcon();
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
             this.TopMost = true;
@@ -1065,13 +1066,34 @@ namespace AgentIsland
 
             var icon = new NotifyIcon
             {
-                Icon = CreateTrayIconBitmap(),
-                Text = "Windows 灵动岛 · 护腰 & AGY 雷达",
+                Icon = LoadAppIcon(),
+                Text = "AgentIsland",
                 ContextMenuStrip = menu,
                 Visible = true
             };
             icon.DoubleClick += (s, e) => { EnsureTopMost(); SendCommandToUi("toggle_overview"); };
             return icon;
+        }
+
+        private static Icon LoadAppIcon()
+        {
+            try
+            {
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] candidates = new[]
+                {
+                    Path.GetFullPath(Path.Combine(exeDir, "..", "assets", "app.ico")),
+                    Path.Combine(exeDir, "assets", "app.ico")
+                };
+                foreach (string p in candidates)
+                {
+                    if (File.Exists(p)) return new Icon(p);
+                }
+                Icon extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (extracted != null) return extracted;
+            }
+            catch { }
+            return CreateTrayIconBitmap();
         }
 
         private static Icon CreateTrayIconBitmap()

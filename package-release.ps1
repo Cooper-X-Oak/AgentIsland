@@ -13,7 +13,7 @@ $ZipPath = "$StageDir.zip"
 Remove-Item $StageDir, $ZipPath -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
 
-$copyDirs = @("bin", "ui", "config", "adapters")
+$copyDirs = @("bin", "ui", "config", "adapters", "assets")
 foreach ($d in $copyDirs) {
     Copy-Item (Join-Path $Root $d) (Join-Path $StageDir $d) -Recurse -Force
 }

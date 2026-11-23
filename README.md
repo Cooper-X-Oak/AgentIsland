@@ -1,5 +1,9 @@
 <div align="center">
 
+<p>
+  <img src="assets/logo.svg" alt="AgentIsland Logo" width="84" height="84" />
+</p>
+
 <h1>AgentIsland</h1>
 
 <p><strong>An 80 KB Native Windows 11 Dynamic Island for AI Coding Agents &amp; Posture Coach</strong></p>

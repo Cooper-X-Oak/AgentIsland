@@ -12,6 +12,7 @@ foreach ($p in @($StartupLnk, $StartMenuLnk)) {
     $Shortcut = $WshShell.CreateShortcut($p)
     $Shortcut.TargetPath = $Exe
     $Shortcut.WorkingDirectory = Split-Path -Parent $Exe
+    $Shortcut.IconLocation = "$Exe,0"
     $Shortcut.Description = "AgentIsland — Windows Dynamic Island for AI Coding Agents & Posture Coach"
     $Shortcut.Save()
 }

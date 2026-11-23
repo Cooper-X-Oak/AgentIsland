@@ -79,10 +79,14 @@ Get-Process -Name "AgentIsland" -ErrorAction SilentlyContinue | Stop-Process -Fo
 Start-Sleep -Milliseconds 250
 
 # 3. Compile Antigravity hook forwarder (island-hook.exe)
+$IconPath = Join-Path $Root "assets\app.ico"
+$IconFlag = if (Test-Path $IconPath) { @("/win32icon:$IconPath") } else { @() }
+
 $HookOut = Join-Path $BinDir "island-hook.exe"
 $HookSrc = Join-Path $SrcDir "IslandHook.cs"
 Write-Host "[1/3] Compiling island-hook.exe ..."
 & $Csc /nologo /optimize+ /platform:x64 /target:exe /utf8output `
+    @IconFlag `
     "/r:System.dll" `
     "/r:System.Core.dll" `
     "/r:System.Web.Extensions.dll" `
@@ -95,6 +99,7 @@ $PushOut = Join-Path $BinDir "island-push.exe"
 $PushSrc = Join-Path $SrcDir "IslandPush.cs"
 Write-Host "[2/3] Compiling island-push.exe ..."
 & $Csc /nologo /optimize+ /platform:x64 /target:exe /utf8output `
+    @IconFlag `
     "/r:System.dll" `
     "/r:System.Core.dll" `
     "/r:System.Web.Extensions.dll" `
@@ -107,6 +112,7 @@ $AppOut = Join-Path $BinDir "AgentIsland.exe"
 $AppSrc = Join-Path $SrcDir "AgentIsland.cs"
 Write-Host "[3/3] Compiling AgentIsland.exe ..."
 & $Csc /nologo /optimize+ /platform:x64 /target:winexe /utf8output `
+    @IconFlag `
     "/r:System.dll" `
     "/r:System.Core.dll" `
     "/r:System.Drawing.dll" `
