@@ -818,7 +818,7 @@
     function computeMainSize(view) {
       if (view === "agy") return { w: 438, h: state.toastText ? 148 : 132, r: 22 };
       if (view === "health") return { w: 438, h: 158, r: 22 };
-      if (view === "overview") return { w: 438, h: 230, r: 22 };
+      if (view === "overview") return { w: 438, h: 188, r: 22 };
       if (state.alerts.length > 0) return { w: 196, h: 36, r: 18 };
       if (state.working.length > 0) return { w: 168, h: 36, r: 18 };
       return { w: 112, h: 36, r: 18 };
@@ -1356,15 +1356,15 @@
         if (state.history.length > 0 && state.alerts.length <= 2) {
           const h = state.history[0];
           listHtml += `<div class="ov-item">
-            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">最近已看：${escapeHtml(getSessionLabel(h))} · ${escapeHtml(h.title || h.summary)}</span></div>
+            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">已看 · ${escapeHtml(getSessionLabel(h))} · ${escapeHtml(h.title || h.summary)}</span></div>
             <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">恢复</button>
           </div>`;
         } else if (!listHtml) {
-          listHtml = `<div class="ov-item"><span class="meta-text">暂无活跃或历史待介入会话 · 快捷键 Alt+\\ 随时唤出</span></div>`;
+          listHtml = `<div class="ov-item"><span class="meta-text">暂无待处理会话</span></div>`;
         }
 
         const pauseText = state.health.paused
-          ? `（暂停剩 ${state.health.pauseRemainMinutes || 1}m）`
+          ? `（暂停 ${state.health.pauseRemainMinutes || 1}m）`
           : "";
 
         renderKey = `ov-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}-${state.health.pauseRemainMinutes}`;
@@ -1373,23 +1373,17 @@
             <div class="card-top">
               <div class="card-top-left">
                 <span class="dot" style="background:#22c55e"></span>
-                <span class="project-name">灵动岛总览</span>
-                <span class="meta-text">· 今日救腰 ${state.health.todayCount} 次</span>
+                <span class="project-name">坐姿 ${mins}/${curInt}m${pauseText}</span>
+                <span class="meta-text">· 今日 ${state.health.todayCount} 次</span>
               </div>
               <div class="card-top-right">
-                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">全部已读</button>` : `<span class="meta-text">右键 · Alt+\\</span>`}
+                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">全已读</button>` : `<div class="int-chips">${intervals}</div>`}
                 <button class="icon-btn" data-action="collapse" title="收起">−</button>
               </div>
             </div>
-            <div class="ov-grid">
-              <div class="ov-row">
-                <span>🪑 坐姿 <strong>${mins}/${curInt}m</strong>${pauseText}</span>
-                <div class="int-chips">${intervals}</div>
-              </div>
-              <div class="ov-list">${listHtml}</div>
-            </div>
+            <div class="ov-list">${listHtml}</div>
             <div class="actions">
-              <button class="btn" style="background:#22c55e;color:#052e16" data-action="open-health-pin">立即做一组护腰</button>
+              <button class="btn" style="background:#22c55e;color:#052e16" data-action="open-health-pin">做一组护腰</button>
               <div class="btn-group">
                 <button class="btn btn-secondary" data-action="health-done">刚站过 +1</button>
                 <button class="btn btn-ghost" data-action="toggle-pause">${state.health.paused ? '恢复' : '暂停1h'}</button>
@@ -1430,18 +1424,22 @@
     dock.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
-      // Rule A1: Hover expands the currently ticking alert card directly; never accidentally pops overview when idle
-      if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0 && !hoverOpenTimer) {
+      // Responsive hover preview across all states (320ms prevents accidental pass-through triggers while staying snappy)
+      if (state.view === "compact" && !state.ctxOpen && !hoverOpenTimer) {
         hoverOpenTimer = setTimeout(() => {
           hoverOpenTimer = null;
-          if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0) {
-            const cur = state.alerts[state.tickerIdx % state.alerts.length];
+          if (state.view === "compact" && !state.ctxOpen) {
             state.pinned = false;
-            state.view = "agy";
-            state.activeAlertId = cur ? cur.id : state.alerts[0].id;
+            if (state.alerts.length > 0) {
+              const cur = state.alerts[state.tickerIdx % state.alerts.length];
+              state.view = "agy";
+              state.activeAlertId = cur ? cur.id : state.alerts[0].id;
+            } else {
+              state.view = "overview";
+            }
             render(true);
           }
-        }, 260);
+        }, 320);
       }
     });
 
@@ -1449,14 +1447,13 @@
       pointerInsideDock = false;
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
       if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused) {
-        // Gentle collapse after pointer leaves an unpinned preview/toast
         hoverCloseTimer = setTimeout(() => {
           hoverCloseTimer = null;
           if (!state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused && !pointerInsideDock) {
             state.view = "compact";
             render(true);
           }
-        }, 650);
+        }, 380);
       }
     });
 
@@ -1695,10 +1692,20 @@
         } else if (msg.type === "command") {
           clearHoverTimers();
           if (msg.command === "outside_click") {
+            let needRender = false;
             if (state.ctxOpen) {
               state.ctxOpen = false;
-              render(false);
+              needRender = true;
             }
+            // Clicking anywhere outside collapses any expanded card immediately (unless actively counting down a workout)
+            if (state.view !== "compact" && !state.countdown.active) {
+              clearAutoCollapseTimer();
+              state.manualHealthOpen = false;
+              state.pinned = false;
+              state.view = "compact";
+              needRender = true;
+            }
+            if (needRender) render(true);
             return;
           }
           state.ctxOpen = false;

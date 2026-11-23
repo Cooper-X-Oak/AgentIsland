@@ -2774,14 +2774,18 @@ namespace AgentIsland
                     && l3Snap.Contains("\"view\":\"agy\"") && l3Snap.Contains("\"autoCollapseMs\":30000");
                 record("ux_notification_tiering_l1_l2_l3", tierRuleOk, "L1=" + l1Snap + " | L2=" + l2Snap + " | L3=" + l3Snap);
 
-                // (f) Outside click closes open context menu cleanly!
+                // (f) Outside click closes BOTH open context menu AND expanded card cleanly!
+                SendCommandToUi("open_overview");
+                await Task.Delay(150);
                 await _coreWebView.ExecuteScriptAsync("document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
                 await Task.Delay(150);
-                string ctxBefore = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("String(window.__uxDebug().ctxOpen)"));
+                string beforeOutside = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
                 SendCommandToUi("outside_click");
                 await Task.Delay(180);
-                string ctxAfter = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("String(window.__uxDebug().ctxOpen)"));
-                record("ux_outside_click_closes_ctx", ctxBefore == "true" && ctxAfter == "false", "before=" + ctxBefore + " after=" + ctxAfter);
+                string afterOutside = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool outsideOk = beforeOutside.Contains("\"ctxOpen\":true") && beforeOutside.Contains("\"view\":\"overview\"")
+                    && afterOutside.Contains("\"ctxOpen\":false") && afterOutside.Contains("\"view\":\"compact\"");
+                record("ux_outside_click_collapses_all", outsideOk, "before=" + beforeOutside + " | after=" + afterOutside);
 
                 // 4. Frontend JS error check
                 string jsErrJson = await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__diagErrors || [])");
