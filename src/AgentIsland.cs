@@ -2027,11 +2027,82 @@ namespace AgentIsland
             return target;
         }
 
+        private IntPtr FocusTerminalWindow()
+        {
+            string[] preferredProcs = new[] { "WindowsTerminal", "wezterm-gui", "alacritty", "Code", "pwsh", "powershell", "cmd" };
+            IntPtr[] matches = new IntPtr[preferredProcs.Length];
+            uint myPid = (uint)Process.GetCurrentProcess().Id;
+
+            EnumWindows((hWnd, lParam) =>
+            {
+                if (!IsWindowVisible(hWnd)) return true;
+                uint pid;
+                GetWindowThreadProcessId(hWnd, out pid);
+                if (pid == myPid) return true;
+                if (GetWindowTextLength(hWnd) <= 0) return true;
+
+                try
+                {
+                    using (var p = Process.GetProcessById((int)pid))
+                    {
+                        string pname = p.ProcessName ?? "";
+                        for (int i = 0; i < preferredProcs.Length; i++)
+                        {
+                            if (matches[i] == IntPtr.Zero && string.Equals(pname, preferredProcs[i], StringComparison.OrdinalIgnoreCase))
+                            {
+                                matches[i] = hWnd;
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+
+            IntPtr target = IntPtr.Zero;
+            for (int i = 0; i < matches.Length; i++)
+            {
+                if (matches[i] != IntPtr.Zero) { target = matches[i]; break; }
+            }
+            if (target == IntPtr.Zero) return IntPtr.Zero;
+
+            try
+            {
+                ShowWindow(target, IsIconic(target) ? SW_RESTORE : SW_SHOW);
+                IntPtr fg = GetForegroundWindow();
+                uint fgPid;
+                uint fgThread = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out fgPid) : 0;
+                uint curThread = GetCurrentThreadId();
+                if (fgThread != 0 && fgThread != curThread)
+                {
+                    AttachThreadInput(curThread, fgThread, true);
+                    SetForegroundWindow(target);
+                    AttachThreadInput(curThread, fgThread, false);
+                }
+                else
+                {
+                    SetForegroundWindow(target);
+                }
+            }
+            catch { }
+            return target;
+        }
+
         private async void JumpToAntigravityConversation(SessionItem session)
         {
+            if (session != null && !string.Equals(session.Source, "antigravity", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(session.Source, "ClaudeCode", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(session.Source, "Codex", StringComparison.OrdinalIgnoreCase))
+                {
+                    FocusTerminalWindow();
+                }
+                return;
+            }
+
             IntPtr targetHwnd = FocusAntigravityWindow();
             if (targetHwnd == IntPtr.Zero || session == null) return;
-            if (!string.Equals(session.Source, "antigravity", StringComparison.OrdinalIgnoreCase)) return;
 
             string query = ResolveSearchQuery(session.LastUserInput, session.TranscriptPath, session.SearchQuery, session.Summary);
             if (string.IsNullOrWhiteSpace(query))

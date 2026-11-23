@@ -1,42 +1,28 @@
 # Codex CLI & Universal Terminal Adapter
 
-Any terminal AI agent (Codex CLI, Aider, OpenCode, Goose, CI scripts, long-running builds) can push live status to **AgentIsland** with zero ports and zero config using `bin\island-push.exe`.
+## Option 1: One-Click Native Hooks (`~/.codex/hooks.json`, Recommended for Codex CLI 0.171+)
 
-## Quick Examples (PowerShell)
+Safely appends AgentIsland hooks (`UserPromptSubmit`, `PermissionRequest`, `Stop`, `Interrupt`) into `~/.codex/hooks.json` without touching your existing hooks or `config.toml` `notify` setting:
 
 ```powershell
-# Mark task as running (blue breathing pill)
-.\bin\island-push.exe --source "Codex" --project "api-server" --title "Running" --body "Refactoring auth middleware" --kind working --id "codex-1"
-
-# Notify completion (blue alert card)
-.\bin\island-push.exe --source "Codex" --project "api-server" --title "Ready for review" --body "All 42 tests passed" --kind info --id "codex-1"
-
-# Notify approval / blocker (amber alert card)
-.\bin\island-push.exe --source "Codex" --project "api-server" --title "Needs approval" --body "Waiting for permission to run migration" --kind decision --id "codex-1"
-
-# Notify error (red alert card)
-.\bin\island-push.exe --source "CI" --project "api-server" --title "Build failed" --body "TypeScript check exited with code 2" --kind error --id "ci-1"
-
-# Clear status
-.\bin\island-push.exe --id "codex-1" --kind clear
+.\adapters\codex-cli\install.ps1
 ```
 
-## PowerShell Wrapper Function
+Uninstall cleanly:
+```powershell
+.\adapters\codex-cli\uninstall.ps1
+```
 
-Add this to your `$PROFILE` to automatically notify AgentIsland whenever any long command finishes:
+## Option 2: Legacy `config.toml` `notify` Hook
+
+If you use an older Codex CLI build without `hooks.json`, add this line at the **top** of `~/.codex/config.toml` (before any `[section]` headers):
+
+```toml
+notify = ["<path-to-AgentIsland>\\bin\\island-hook.exe", "--adapter", "codex"]
+```
+
+## Option 3: Universal CLI Push (`island-push.exe`) for Any Terminal / Script
 
 ```powershell
-function Watch-Island {
-    param([scriptblock]$Script, [string]$Project = (Split-Path -Leaf (Get-Location)))
-    $push = "<path-to-AgentIsland>\bin\island-push.exe"
-    $id = "cmd-$(Get-Random)"
-    & $push --source "Terminal" --project $Project --title "Running" --body "$Script" --kind working --id $id | Out-Null
-    try {
-        & $Script
-        & $push --source "Terminal" --project $Project --title "Done" --body "Command completed" --kind info --id $id | Out-Null
-    } catch {
-        & $push --source "Terminal" --project $Project --title "Failed" --body "$_" --kind error --id $id | Out-Null
-        throw
-    }
-}
+.\bin\island-push.exe --source "Codex" --project "api-server" --title "Ready for review" --body "All 42 tests passed" --kind info --id "codex-1"
 ```

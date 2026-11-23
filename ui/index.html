@@ -914,7 +914,7 @@
             <div class="summary">${escapeHtml(item.summary)}</div>
             <div class="actions">
               <button class="btn" style="background:${st.color};color:${st.textColor}" data-action="agy-focus" data-id="${escapeHtml(item.id)}">
-                ${item.source && item.source !== 'antigravity' ? '标记已读 ✓' : '直达该会话 ↗'}
+                ${!item.source || item.source === 'antigravity' ? '直达该会话 ↗' : ((item.source === 'ClaudeCode' || item.source === 'Codex') ? '切到终端 ↗' : '标记已读 ✓')}
               </button>
               <div class="btn-group">
                 ${nextBtn}

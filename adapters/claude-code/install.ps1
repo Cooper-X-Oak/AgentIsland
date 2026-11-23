@@ -1,10 +1,21 @@
+param(
+    [string]$ConfigPath = ""
+)
+
 $ErrorActionPreference = "Stop"
 
-$AdapterDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$HookScript = Join-Path $AdapterDir "claude-hook.ps1"
-$ClaudeDir = Join-Path $env:USERPROFILE ".claude"
-$SettingsPath = Join-Path $ClaudeDir "settings.json"
-New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
+$Root = Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\..")
+$HookExe = Join-Path $Root "bin\island-hook.exe"
+if (-not (Test-Path $HookExe)) {
+    throw "island-hook.exe not found at $HookExe. Please run .\build.ps1 first."
+}
+
+$SettingsPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    Join-Path $env:USERPROFILE ".claude\settings.json"
+} else {
+    $ConfigPath
+}
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SettingsPath) | Out-Null
 
 $rootObj = @{}
 if (Test-Path $SettingsPath) {
@@ -25,10 +36,10 @@ if ($rootObj.ContainsKey("hooks") -and $rootObj["hooks"]) {
 }
 
 function Add-OrReplaceClaudeHook($Map, [string]$EventName) {
-    $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HookScript`" -Event $EventName"
+    $cmd = "`"$HookExe`" --adapter claude --event $EventName"
     $existing = @()
     if ($Map.ContainsKey($EventName)) {
-        $existing = @($Map[$EventName] | Where-Object { ($_ | ConvertTo-Json -Depth 5 -Compress) -notmatch "claude-hook\.ps1" })
+        $existing = @($Map[$EventName] | Where-Object { ($_ | ConvertTo-Json -Depth 6 -Compress) -notmatch "island-hook\.exe|claude-hook\.ps1" })
     }
     $entry = @{
         matcher = ""
@@ -36,17 +47,18 @@ function Add-OrReplaceClaudeHook($Map, [string]$EventName) {
             @{
                 type    = "command"
                 command = $cmd
+                timeout = 5
             }
         )
     }
     $Map[$EventName] = @($existing + $entry)
 }
 
-Add-OrReplaceClaudeHook $hooksObj "UserPromptSubmit"
-Add-OrReplaceClaudeHook $hooksObj "Notification"
-Add-OrReplaceClaudeHook $hooksObj "Stop"
+foreach ($ev in @("UserPromptSubmit", "PermissionRequest", "Notification", "Stop", "StopFailure")) {
+    Add-OrReplaceClaudeHook $hooksObj $ev
+}
 
 $rootObj["hooks"] = $hooksObj
-$json = $rootObj | ConvertTo-Json -Depth 10
+$json = $rootObj | ConvertTo-Json -Depth 12
 [System.IO.File]::WriteAllText($SettingsPath, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "CLAUDE_CODE_ADAPTER_INSTALLED: $SettingsPath"

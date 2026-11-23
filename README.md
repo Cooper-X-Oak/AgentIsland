@@ -76,9 +76,9 @@ Test both alerts immediately:
 
 | AI Terminal | Status | Setup |
 | :--- | :---: | :--- |
-| **Google Antigravity** (Hooks + `transcript.jsonl` Approval Radar + `Ctrl+K` Exact Session Jump) | Ready | `.\adapters\antigravity\install.ps1` |
-| **Claude Code** (`UserPromptSubmit` / `Notification` / `Stop` Hooks) | Ready | `.\adapters\claude-code\install.ps1` |
-| **Codex CLI / Any Terminal / Build Scripts** (`island-push.exe`) | Ready | See [`adapters/codex-cli/README.md`](adapters/codex-cli/README.md) |
+| **Google Antigravity** (Hooks + `transcript.jsonl` Approval Radar + `Ctrl+K` Exact Session Jump) | Live Verified | `.\adapters\antigravity\install.ps1` |
+| **Claude Code** (`UserPromptSubmit` / `PermissionRequest` / `Notification` / `Stop` Hooks) | Contract Verified | `.\adapters\claude-code\install.ps1` |
+| **Codex CLI** (`~/.codex/hooks.json` + legacy `notify` + `island-push.exe`) | Contract Verified | `.\adapters\codex-cli\install.ps1` |
 | **Cursor / Windsurf / Cline / OpenCode** | Roadmap | PRs welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 ### Universal CLI Push Example
