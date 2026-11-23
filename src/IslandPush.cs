@@ -113,8 +113,10 @@ namespace AgentIsland
             if (string.IsNullOrEmpty(k)) return "needs_reply";
             switch (k.Trim().ToLowerInvariant())
             {
-                case "decision":
                 case "approval":
+                case "urgent":
+                    return "needs_approval";
+                case "decision":
                 case "warn":
                 case "warning":
                     return "needs_decision";

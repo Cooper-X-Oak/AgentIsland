@@ -130,6 +130,7 @@ namespace AgentIsland
         public string SessionName; // Real conversation title (e.g. from annotations/*.pbtxt)
         public string Project;
         public string Kind; // working | needs_approval | needs_decision | needs_reply | error
+        public int Level; // 0=silent running | 1=capsule ticker | 2=glance toast (8s) | 3=blocking urgent (30s)
         public string Title;
         public string Summary;
         public string LastUserInput;
@@ -1170,14 +1171,6 @@ namespace AgentIsland
                                             break;
                                         }
                                     }
-                                    else if ((tname == "write_file" || tname == "edit_file") && targs != null && ageSec >= 6.0)
-                                    {
-                                        waitingForApproval = true;
-                                        approvalTitle = "待批准写文件";
-                                        string p = TrimQuotes(GetStr(targs, "Path"));
-                                        approvalSummary = "请求修改文件：" + Shorten(Path.GetFileName(p), 64);
-                                        break;
-                                    }
                                 }
                             }
                         }
@@ -1189,6 +1182,7 @@ namespace AgentIsland
                         if (session.Kind != "needs_approval" || session.ApprovalStepKey != key)
                         {
                             session.Kind = "needs_approval";
+                            session.Level = 3;
                             session.Title = approvalTitle;
                             session.Summary = approvalSummary;
                             session.ApprovalStepKey = key;
@@ -1202,6 +1196,7 @@ namespace AgentIsland
                     {
                         // User approved and tool progressed past PLANNER_RESPONSE
                         session.Kind = "working";
+                        session.Level = 0;
                         session.Title = "思考中";
                         session.ApprovalStepKey = "";
                         session.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -1652,6 +1647,8 @@ namespace AgentIsland
                     string summaryStr = GetStr(dict, "summary");
                     string searchQuery = ResolveSearchQuery(resolvedSessionName, lastInput, resolvedTranscript, prevQuery, summaryStr);
 
+                    int level = GetInt(dict, "level", InferNotificationLevel(kind));
+
                     var item = new SessionItem
                     {
                         ConversationId = convId,
@@ -1659,6 +1656,7 @@ namespace AgentIsland
                         SessionName = resolvedSessionName,
                         Project = projectStr,
                         Kind = kind,
+                        Level = level,
                         Title = GetStr(dict, "title"),
                         Summary = summaryStr,
                         LastUserInput = lastInput,
@@ -1671,7 +1669,9 @@ namespace AgentIsland
                     _sessions[convId] = item;
                     changed = true;
 
-                    if (kind == "needs_decision" || kind == "needs_approval" || kind == "needs_reply" || kind == "error")
+                    // Only L2 (decision/error) and L3 (blocking approval) actively expand & chime;
+                    // L1 (needs_reply / info) stays quietly inside the rotating capsule ticker!
+                    if (level >= 2)
                     {
                         hasNewAlert = true;
                     }
@@ -1709,11 +1709,20 @@ namespace AgentIsland
             return (dict != null && dict.TryGetValue(key, out v) && v != null) ? v.ToString() : "";
         }
 
+        private static int InferNotificationLevel(string kind)
+        {
+            if (kind == "needs_approval") return 3;
+            if (kind == "needs_decision" || kind == "error") return 2;
+            if (kind == "needs_reply") return 1;
+            return 0;
+        }
+
         private List<SessionItem> GetSortedAlerts()
         {
             return _sessions.Values
                 .Where(s => s.Kind != "working")
-                .OrderByDescending(s => s.Kind == "error" ? 4 : (s.Kind == "needs_approval" ? 3 : (s.Kind == "needs_decision" ? 2 : 1)))
+                .OrderByDescending(s => s.Level > 0 ? s.Level : InferNotificationLevel(s.Kind))
+                .ThenByDescending(s => s.Kind == "error" ? 1 : 0)
                 .ThenBy(s => s.Timestamp) // oldest waiting first
                 .ToList();
         }
@@ -1732,6 +1741,7 @@ namespace AgentIsland
                     { "sessionName", !string.IsNullOrEmpty(s.SessionName) ? s.SessionName : s.Project },
                     { "project", s.Project },
                     { "kind", s.Kind },
+                    { "level", s.Level > 0 ? s.Level : InferNotificationLevel(s.Kind) },
                     { "title", s.Title },
                     { "summary", s.Summary },
                     { "timestamp", s.Timestamp }
@@ -2707,38 +2717,62 @@ namespace AgentIsland
                 bool exactTargetOk = exactTarget.Contains("\"view\":\"agy\"") && exactTarget.Contains("\"activeAlertId\":\"ux-alert-2\"");
                 record("ux_overview_exact_alert_id", exactTargetOk, exactTarget);
 
-                // (e) Soft needs_reply arms 6s auto-collapse; strong needs_approval stays pinned!
+                // (e) Notification Tiering: L1 stays collapsed in ticker; L2 auto-collapses in 8s; L3 auto-collapses in 30s!
                 _sessions.Clear();
-                _sessions["ux-soft"] = new SessionItem
+                PushStateToUi(false, null);
+                await Task.Delay(150);
+                _sessions["ux-l1"] = new SessionItem
                 {
-                    ConversationId = "ux-soft",
+                    ConversationId = "ux-l1",
                     Source = "antigravity",
                     SessionName = "灵动岛",
                     Project = "AgentIsland",
                     Kind = "needs_reply",
+                    Level = 1,
                     Title = "等你回复",
                     Summary = "已替换完成，线上代码与发版包现已一致",
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };
                 PushStateToUi(true, "agy");
-                await Task.Delay(200);
-                string softSnap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
-                _sessions["ux-strong"] = new SessionItem
+                await Task.Delay(180);
+                string l1Snap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+
+                _sessions["ux-l2"] = new SessionItem
                 {
-                    ConversationId = "ux-strong",
+                    ConversationId = "ux-l2",
+                    Source = "antigravity",
+                    SessionName = "灵动岛",
+                    Project = "AgentIsland",
+                    Kind = "needs_decision",
+                    Level = 2,
+                    Title = "等你拍板",
+                    Summary = "确认发版策略？（v0.1.1 / 覆盖 v0.1.0）",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                PushStateToUi(true, "agy");
+                await Task.Delay(180);
+                string l2Snap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+
+                _sessions["ux-l3"] = new SessionItem
+                {
+                    ConversationId = "ux-l3",
                     Source = "Codex",
                     SessionName = "infra-cli",
                     Project = "infra-cli",
                     Kind = "needs_approval",
+                    Level = 3,
                     Title = "待批准命令",
                     Summary = "请求批准 shell：terraform apply",
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };
                 PushStateToUi(true, "agy");
-                await Task.Delay(200);
-                string strongSnap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
-                bool autoCollapseRuleOk = softSnap.Contains("\"softAutoCollapseArmed\":true") && strongSnap.Contains("\"softAutoCollapseArmed\":false");
-                record("ux_soft_vs_strong_collapse_rule", autoCollapseRuleOk, "soft=" + softSnap + " | strong=" + strongSnap);
+                await Task.Delay(180);
+                string l3Snap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+
+                bool tierRuleOk = l1Snap.Contains("\"view\":\"compact\"")
+                    && l2Snap.Contains("\"view\":\"agy\"") && l2Snap.Contains("\"autoCollapseMs\":8000")
+                    && l3Snap.Contains("\"view\":\"agy\"") && l3Snap.Contains("\"autoCollapseMs\":30000");
+                record("ux_notification_tiering_l1_l2_l3", tierRuleOk, "L1=" + l1Snap + " | L2=" + l2Snap + " | L3=" + l3Snap);
 
                 // (f) Outside click closes open context menu cleanly!
                 await _coreWebView.ExecuteScriptAsync("document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");

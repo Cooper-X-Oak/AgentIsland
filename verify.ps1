@@ -57,7 +57,8 @@ function Test-HookCase([string]$Name, [string[]]$ArgsList, [string]$StdinJson, [
 # Antigravity (4 core + 2 decision-summary cases)
 Test-HookCase "AGY.PreInvocation" @("--adapter","antigravity","--event","PreInvocation") '{"conversationId":"c1","workspacePaths":["D:/proj/demo"],"hookEventName":"PreInvocation","lastUserInput":"hello"}' "{}" "antigravity" "working"
 Test-HookCase "AGY.AskQuestion"   @("--adapter","antigravity","--event","AskQuestion")   '{"conversationId":"c2","workspacePaths":["D:/proj/demo"],"hookEventName":"PreToolUse","toolCall":{"id":"t1","name":"ask_question","args":{"questions":[{"question":"Confirm deploy?","options":["(Recommended) Approve — push now","Skip"]}]}}}' '{"decision":"allow"}' "antigravity" "needs_decision"
-Test-HookCase "AGY.StopReply"     @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c3","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","lastUserInput":"fix corners"}' '{"decision":"allow"}' "antigravity" "needs_reply"
+Test-HookCase "AGY.StopReply"     @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c3","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","fullyIdle":true,"lastUserInput":"fix corners"}' '{"decision":"allow"}' "antigravity" "needs_reply"
+Test-HookCase "AGY.FalseStopBG"   @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c3b","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","fullyIdle":false}' '{"decision":"allow"}' "antigravity" "working"
 Test-HookCase "AGY.StopError"     @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c4","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"ERROR","error":"timeout"}' '{"decision":"allow"}' "antigravity" "error"
 
 # Antigravity real session title + AI reply decision summary (must NOT echo lastUserInput!)

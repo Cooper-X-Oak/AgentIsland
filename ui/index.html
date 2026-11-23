@@ -177,6 +177,15 @@
       to   { opacity: 1; }
     }
 
+    @keyframes tickerIn {
+      from { opacity: 0.25; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .ticker-text {
+      animation: tickerIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
     @keyframes pulseDot {
       0%, 100% { opacity: 1; transform: scale(1); }
       50%      { opacity: 0.35; transform: scale(0.8); }
@@ -605,6 +614,7 @@
       manualHealthOpen: false,
       ctxOpen: false,
       activeAlertId: "",
+      tickerIdx: 0,
       countdown: {
         active: false,
         paused: false,
@@ -624,7 +634,8 @@
     let lastViewMode = "";
     let hoverOpenTimer = null;
     let hoverCloseTimer = null;
-    let softCollapseTimer = null;
+    let autoCollapseTimer = null;
+    let autoCollapseMs = 0;
     let toastTimer = null;
     let countdownInterval = null;
     let hitRectTimer = null;
@@ -670,6 +681,15 @@
         return ` · ${item.project}`;
       }
       return "";
+    }
+
+    function getAlertLevel(item) {
+      if (!item) return 0;
+      if (typeof item.level === "number" && item.level >= 0) return item.level;
+      if (item.kind === "needs_approval") return 3;
+      if (item.kind === "needs_decision" || item.kind === "error") return 2;
+      if (item.kind === "needs_reply") return 1;
+      return 0;
     }
 
     function isStrongKind(kind) {
@@ -766,25 +786,32 @@
       hitRectTimer = setTimeout(reportHitRectsNow, 370);
     }
 
-    function clearSoftCollapseTimer() {
-      if (softCollapseTimer) {
-        clearTimeout(softCollapseTimer);
-        softCollapseTimer = null;
+    function clearAutoCollapseTimer() {
+      if (autoCollapseTimer) {
+        clearTimeout(autoCollapseTimer);
+        autoCollapseTimer = null;
       }
+      autoCollapseMs = 0;
     }
 
-    function armSoftCollapseTimer(delayMs) {
-      clearSoftCollapseTimer();
-      softCollapseTimer = setTimeout(() => {
-        softCollapseTimer = null;
-        if (state.view === "agy" && !state.pinned && !pointerInsideDock && !state.ctxOpen) {
-          const active = getActiveAlert().item;
-          if (!active || !isStrongKind(active.kind)) {
-            state.view = "compact";
-            render(true);
-          }
+    function armAutoCollapse(delayMs) {
+      clearAutoCollapseTimer();
+      if (!delayMs || delayMs <= 0) return;
+      autoCollapseMs = delayMs;
+      autoCollapseTimer = setTimeout(() => {
+        autoCollapseTimer = null;
+        autoCollapseMs = 0;
+        if (state.view === "compact") return;
+        if (pointerInsideDock || state.ctxOpen || state.countdown.active || state.countdown.paused) {
+          // Reschedule gently while pointer is still hovering or workout is active
+          if (!state.countdown.active && !state.countdown.paused) armAutoCollapse(delayMs);
+          return;
         }
-      }, delayMs || 6000);
+        state.manualHealthOpen = false;
+        state.pinned = false;
+        state.view = "compact";
+        render(true);
+      }, delayMs);
     }
 
     function showToast(text) {
@@ -836,7 +863,7 @@
       state.countdown.paused = false;
       state.pinned = true;
       state.manualHealthOpen = true;
-      clearSoftCollapseTimer();
+      clearAutoCollapseTimer();
       render(true);
 
       countdownInterval = setInterval(() => {
@@ -850,14 +877,17 @@
           state.health.snoozed = false;
           state.health.todayCount = (state.health.todayCount || 0) + 1;
           postHost({ type: "health_done" });
-          if (state.alerts.length > 0) {
+          const top = state.alerts[0];
+          const topLvl = getAlertLevel(top);
+          if (top && topLvl >= 2) {
             state.view = "agy";
-            const top = getActiveAlert().item;
-            state.pinned = !!(top && isStrongKind(top.kind));
-            if (!state.pinned) armSoftCollapseTimer(6000);
+            state.activeAlertId = top.id;
+            state.pinned = false;
+            armAutoCollapse(topLvl >= 3 ? 30000 : 8000);
           } else {
             state.view = "compact";
             state.pinned = false;
+            clearAutoCollapseTimer();
           }
           render(true);
         } else {
@@ -940,7 +970,7 @@
         <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">关闭菜单</span><span class="meta-text">Alt+\\</span></button>`;
     }
 
-    // ==================== Priority Arbiter ====================
+    // ==================== Priority & Attention Tiering Arbiter ====================
 
     function resolveAutoView(triggerExpand, focusKind) {
       const countdownProtected = (state.view === "health" && (state.countdown.active || state.countdown.paused));
@@ -953,10 +983,15 @@
           if (countdownProtected) return;
 
           const top = state.alerts[0];
-          const strong = isStrongKind(top.kind);
+          const lvl = getAlertLevel(top);
 
-          // If user is already inspecting a pinned alert card, don't yank their cursor unless a stronger alert arrived
-          if (state.view === "agy" && state.pinned && state.activeAlertId && !strong) {
+          // L1 (needs_reply / info): NEVER force-expand a big card; stay inside the rotating capsule ticker!
+          if (lvl <= 1) {
+            return;
+          }
+
+          // If user is already inspecting a pinned alert card, don't yank their cursor unless an L3 blocking alert arrived
+          if (state.view === "agy" && state.pinned && state.activeAlertId && lvl < 3) {
             if (state.alerts.some(a => a.id === state.activeAlertId)) {
               return;
             }
@@ -965,43 +1000,44 @@
           state.view = "agy";
           state.activeAlertId = top.id;
           state.manualHealthOpen = false;
-          if (strong) {
-            state.pinned = true;
-            clearSoftCollapseTimer();
-          } else {
-            state.pinned = false;
-            armSoftCollapseTimer(6000);
-          }
+          state.pinned = false;
+          // L2 (decision/error) -> 8s glance toast; L3 (blocking approval) -> 30s before graceful collapse to pulse capsule
+          armAutoCollapse(lvl >= 3 ? 30000 : 8000);
           return;
         }
 
         if (focusKind === "health" && state.health.alertActive) {
           state.view = "health";
-          state.pinned = true;
+          state.pinned = false;
           state.manualHealthOpen = false;
-          clearSoftCollapseTimer();
+          // If user is away/busy for 45s without starting workout, collapse gracefully to pulsing green orb
+          armAutoCollapse(45000);
           return;
         }
       }
 
       // Guard: if viewing agy and queue became empty, step down cleanly
       if (state.view === "agy" && state.alerts.length === 0) {
-        clearSoftCollapseTimer();
+        clearAutoCollapseTimer();
         state.activeAlertId = "";
         state.view = state.health.alertActive ? "health" : "compact";
-        state.pinned = state.health.alertActive;
+        state.pinned = false;
+        if (state.view === "health") armAutoCollapse(45000);
       }
 
       // Guard: ONLY auto-close health if it was auto-opened (never yank a manually opened health card!)
       if (state.view === "health" && !state.manualHealthOpen && !state.health.alertActive && !state.countdown.active && !state.countdown.paused) {
-        if (state.alerts.length > 0) {
-          const top = getActiveAlert().item;
+        const top = state.alerts[0];
+        const topLvl = getAlertLevel(top);
+        if (top && topLvl >= 2) {
           state.view = "agy";
-          state.pinned = !!(top && isStrongKind(top.kind));
-          if (!state.pinned) armSoftCollapseTimer(6000);
+          state.activeAlertId = top.id;
+          state.pinned = false;
+          armAutoCollapse(topLvl >= 3 ? 30000 : 8000);
         } else {
           state.view = "compact";
           state.pinned = false;
+          clearAutoCollapseTimer();
         }
       }
     }
@@ -1018,8 +1054,10 @@
         state.manualHealthOpen = false;
       }
       if (viewChanged && lastViewMode === "agy") {
-        clearSoftCollapseTimer();
         state.toastText = "";
+      }
+      if (viewChanged && state.view === "compact") {
+        clearAutoCollapseTimer();
       }
       lastViewMode = state.view;
       const enterCls = viewChanged ? " content-enter" : "";
@@ -1034,39 +1072,40 @@
 
       if (state.view === "compact") {
         if (state.alerts.length > 0) {
-          const top = state.alerts[0];
-          const st = getAlertStyle(top.kind);
-          const sessionTitle = getSessionLabel(top);
+          const tIdx = state.tickerIdx % state.alerts.length;
+          const cur = state.alerts[tIdx];
+          const st = getAlertStyle(cur.kind);
+          const sessionTitle = getSessionLabel(cur);
+          const countText = state.alerts.length > 1 ? `${tIdx + 1}/${state.alerts.length}` : "1";
           mainIsland.classList.add(st.glow);
-          renderKey = `compact-alert-${top.id}-${top.kind}-${sessionTitle}-${state.alerts.length}`;
+          renderKey = `compact-alert-${cur.id}-${cur.kind}-${sessionTitle}-${tIdx}-${state.alerts.length}`;
           html = `
-            <div class="pill-bar${enterCls}" data-action="open-agy-pin" data-id="${escapeHtml(top.id)}">
+            <div class="pill-bar${enterCls}" data-action="open-agy-pin" data-id="${escapeHtml(cur.id)}">
               <div class="pill-left">
                 <span class="dot dot-pulse" style="background:${st.color}"></span>
-                <span class="pill-text">${escapeHtml(top.title || st.label)} · ${escapeHtml(sessionTitle)}</span>
+                <span class="pill-text ticker-text">${escapeHtml(cur.title || st.label)} · ${escapeHtml(sessionTitle)}</span>
               </div>
               <div class="pill-right">
-                <span class="mini-badge" style="background:${st.color}26;color:${st.color}">${state.alerts.length}</span>
+                <span class="mini-badge" style="background:${st.color}26;color:${st.color}">${countText}</span>
               </div>
             </div>`;
         } else if (state.working.length > 0) {
           mainIsland.classList.add("glow-blue");
           const wCount = state.working.length;
-          const firstSrc = getSourceLabel(state.working[0].source);
-          const allSameSrc = state.working.every(w => getSourceLabel(w.source) === firstSrc);
-          const srcPrefix = allSameSrc ? firstSrc : "Agent";
-          const label = wCount === 1
-            ? `${srcPrefix} 思考中 · ${getSessionLabel(state.working[0])}`
-            : `${srcPrefix} 思考中 · ${wCount} 个会话`;
-          renderKey = `compact-work-${wCount}-${label}`;
+          const wIdx = state.tickerIdx % wCount;
+          const curW = state.working[wIdx];
+          const srcPrefix = getSourceLabel(curW.source);
+          const label = `${srcPrefix} 思考中 · ${getSessionLabel(curW)}`;
+          const rightTag = wCount > 1 ? `${wIdx + 1}/${wCount}` : "LIVE";
+          renderKey = `compact-work-${wIdx}-${wCount}-${label}`;
           html = `
             <div class="pill-bar${enterCls}" data-action="open-overview-pin">
               <div class="pill-left">
                 <span class="dot dot-pulse" style="background:#3b82f6"></span>
-                <span class="pill-text">${escapeHtml(label)}</span>
+                <span class="pill-text ticker-text">${escapeHtml(label)}</span>
               </div>
               <div class="pill-right">
-                <span class="muted-tag">LIVE</span>
+                <span class="muted-tag">${rightTag}</span>
               </div>
             </div>`;
         } else {
@@ -1278,7 +1317,18 @@
       scheduleHitRectSync();
     }
 
-    // ==================== Hover Preview (Only When Alerts Exist) ====================
+    // ==================== Compact Ticker + Hover Preview ====================
+
+    setInterval(() => {
+      if (state.view !== "compact" || pointerInsideDock || state.ctxOpen) return;
+      if (state.alerts.length > 1) {
+        state.tickerIdx = (state.tickerIdx + 1) % state.alerts.length;
+        render(false);
+      } else if (state.alerts.length === 0 && state.working.length > 1) {
+        state.tickerIdx = (state.tickerIdx + 1) % state.working.length;
+        render(false);
+      }
+    }, 3500);
 
     function clearHoverTimers() {
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
@@ -1288,18 +1338,15 @@
     dock.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
-      // Pause soft auto-collapse while reading the card
-      if (state.view === "agy" && softCollapseTimer) {
-        clearSoftCollapseTimer();
-      }
-      // Rule A1: Only auto-expand on hover when there are pending alerts (never accidentally pop 230px overview over browser tabs!)
+      // Rule A1: Hover expands the currently ticking alert card directly; never accidentally pops overview when idle
       if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0 && !hoverOpenTimer) {
         hoverOpenTimer = setTimeout(() => {
           hoverOpenTimer = null;
           if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0) {
+            const cur = state.alerts[state.tickerIdx % state.alerts.length];
             state.pinned = false;
             state.view = "agy";
-            state.activeAlertId = state.alerts[0].id;
+            state.activeAlertId = cur ? cur.id : state.alerts[0].id;
             render(true);
           }
         }, 260);
@@ -1310,13 +1357,14 @@
       pointerInsideDock = false;
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
       if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused) {
+        // Gentle collapse after pointer leaves an unpinned preview/toast
         hoverCloseTimer = setTimeout(() => {
           hoverCloseTimer = null;
           if (!state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused && !pointerInsideDock) {
             state.view = "compact";
             render(true);
           }
-        }, 420);
+        }, 650);
       }
     });
 
@@ -1328,14 +1376,14 @@
       render(false);
     });
 
-    // Clicking health orb directly opens health break card (manual & pinned)
+    // Clicking health orb directly opens health break card (manual, 60s idle fallback unless workout starts)
     healthOrb.addEventListener("click", () => {
       clearHoverTimers();
-      clearSoftCollapseTimer();
       state.ctxOpen = false;
       state.manualHealthOpen = true;
       state.view = "health";
       state.pinned = true;
+      armAutoCollapse(60000);
       render(true);
     });
 
@@ -1385,7 +1433,6 @@
 
       switch (action) {
         case "open-agy-pin":
-          clearSoftCollapseTimer();
           state.ctxOpen = false;
           state.manualHealthOpen = false;
           state.view = "agy";
@@ -1395,27 +1442,28 @@
           } else if (state.alerts.length > 0) {
             state.activeAlertId = state.alerts[0].id;
           }
+          armAutoCollapse(60000);
           render(true);
           break;
         case "open-health-pin":
-          clearSoftCollapseTimer();
           state.ctxOpen = false;
           state.manualHealthOpen = true;
           state.view = "health";
           state.pinned = true;
+          armAutoCollapse(60000);
           render(true);
           break;
         case "open-overview-pin":
-          clearSoftCollapseTimer();
           state.ctxOpen = false;
           state.manualHealthOpen = false;
           state.view = "overview";
           state.pinned = true;
+          armAutoCollapse(60000);
           render(true);
           break;
         case "collapse":
           resetCountdown();
-          clearSoftCollapseTimer();
+          clearAutoCollapseTimer();
           state.ctxOpen = false;
           state.manualHealthOpen = false;
           state.pinned = false;
@@ -1427,22 +1475,21 @@
           render(false);
           break;
         case "agy-next":
-          clearSoftCollapseTimer();
           state.pinned = true;
           if (state.alerts.length > 1) {
             const cur = getActiveAlert().idx;
             state.activeAlertId = state.alerts[(cur + 1) % state.alerts.length].id;
           }
+          armAutoCollapse(60000);
           render(true);
           break;
         case "agy-focus":
           // Let host confirm window focus before archiving; if window not found, host keeps card & sends toast
-          clearSoftCollapseTimer();
           state.pinned = true;
+          armAutoCollapse(60000);
           postHost({ type: "agy_focus", id });
           break;
         case "agy-dismiss":
-          clearSoftCollapseTimer();
           state.alerts = state.alerts.filter(a => a.id !== id);
           if (state.activeAlertId === id) state.activeAlertId = "";
           postHost({ type: "agy_dismiss", id });
@@ -1450,7 +1497,7 @@
           render(true);
           break;
         case "agy-dismiss-all":
-          clearSoftCollapseTimer();
+          clearAutoCollapseTimer();
           state.alerts = [];
           state.activeAlertId = "";
           postHost({ type: "agy_dismiss_all" });
@@ -1458,13 +1505,13 @@
           render(true);
           break;
         case "history-restore":
-          clearSoftCollapseTimer();
           state.pinned = true;
+          armAutoCollapse(60000);
           postHost({ type: "history_restore", id });
           break;
         case "copy-alert":
-          clearSoftCollapseTimer();
           state.pinned = true;
+          armAutoCollapse(60000);
           postHost({ type: "copy_text", text: target.getAttribute("data-text") || "" });
           state.copyTip = "ok";
           render(true);
@@ -1482,14 +1529,17 @@
           state.health.snoozed = false;
           state.health.todayCount = (state.health.todayCount || 0) + 1;
           postHost({ type: "health_done" });
-          if (state.alerts.length > 0) {
+          const nextTop = state.alerts[0];
+          const nextLvl = getAlertLevel(nextTop);
+          if (nextTop && nextLvl >= 2) {
             state.view = "agy";
-            const top = getActiveAlert().item;
-            state.pinned = !!(top && isStrongKind(top.kind));
-            if (!state.pinned) armSoftCollapseTimer(6000);
+            state.activeAlertId = nextTop.id;
+            state.pinned = false;
+            armAutoCollapse(nextLvl >= 3 ? 30000 : 8000);
           } else {
             state.view = "compact";
             state.pinned = false;
+            clearAutoCollapseTimer();
           }
           render(true);
           break;
@@ -1498,17 +1548,19 @@
           state.pinned = true;
           state.manualHealthOpen = true;
           state.health.actionIndex = (state.health.actionIndex + 1) % ACTIONS.length;
+          armAutoCollapse(60000);
           postHost({ type: "health_shuffle" });
           render(true);
           break;
         case "health-snooze":
           resetCountdown();
+          clearAutoCollapseTimer();
           state.manualHealthOpen = false;
           state.health.alertActive = false;
           state.health.snoozed = true;
           postHost({ type: "health_snooze", minutes: 5 });
-          state.view = state.alerts.length > 0 ? "agy" : "compact";
-          state.pinned = state.alerts.length > 0 && isStrongKind(getActiveAlert().item.kind);
+          state.view = "compact";
+          state.pinned = false;
           render(true);
           break;
         case "set-interval":
@@ -1559,22 +1611,22 @@
           }
           state.ctxOpen = false;
           if (msg.command === "open_overview") {
-            clearSoftCollapseTimer();
             state.manualHealthOpen = false;
             state.view = "overview";
             state.pinned = true;
+            armAutoCollapse(60000);
             render(true);
           } else if (msg.command === "toggle_overview") {
             if (state.view === "compact") {
-              clearSoftCollapseTimer();
               state.view = state.alerts.length > 0 ? "agy" : (state.health.alertActive ? "health" : "overview");
               state.pinned = true;
               if (state.view === "agy" && state.alerts.length > 0) {
                 state.activeAlertId = state.alerts[0].id;
               }
+              armAutoCollapse(60000);
             } else {
               resetCountdown();
-              clearSoftCollapseTimer();
+              clearAutoCollapseTimer();
               state.manualHealthOpen = false;
               state.view = "compact";
               state.pinned = false;
@@ -1592,10 +1644,11 @@
       manualHealthOpen: state.manualHealthOpen,
       ctxOpen: state.ctxOpen,
       activeAlertId: state.activeAlertId,
+      tickerIdx: state.tickerIdx,
       countdownActive: state.countdown.active,
       countdownPaused: state.countdown.paused,
       countdownRemain: state.countdown.remain,
-      softAutoCollapseArmed: !!softCollapseTimer,
+      autoCollapseMs: autoCollapseMs,
       toastText: state.toastText
     });
 

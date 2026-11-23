@@ -124,6 +124,13 @@ namespace AgentIsland
             else if (string.Equals(eventArg, "AskQuestion", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(eventArg, "PreToolUse", StringComparison.OrdinalIgnoreCase))
             {
+                string toolName = ExtractToolCallName(root);
+                if (!string.IsNullOrEmpty(toolName) &&
+                    !string.Equals(toolName, "ask_question", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(toolName, "request_user_input", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
                 kind = "needs_decision";
                 title = "等你拍板";
                 summary = ExtractQuestionSummary(root);
@@ -136,6 +143,9 @@ namespace AgentIsland
             {
                 string reason = GetString(root, "terminationReason");
                 string err = CleanSnippet(GetString(root, "error"), 115);
+                bool hasFullyIdleKey = root.ContainsKey("fullyIdle");
+                bool isFullyIdle = !hasFullyIdleKey || GetBool(root, "fullyIdle");
+                bool isContinuation = GetBool(root, "continuationActive");
 
                 if (string.Equals(reason, "USER_CANCELED", StringComparison.OrdinalIgnoreCase))
                 {
@@ -148,6 +158,15 @@ namespace AgentIsland
                     kind = "error";
                     title = "报错卡住";
                     summary = string.IsNullOrEmpty(err) ? "执行遇到异常，请检查会话" : CleanErrorLine(err, 115);
+                }
+                else if (!isFullyIdle || isContinuation)
+                {
+                    // Mid-turn pause waiting for background task / subagent / continuation -> stay L0 silent!
+                    kind = "working";
+                    title = "后台运行中";
+                    summary = !string.IsNullOrEmpty(sessionName)
+                        ? ("后台任务执行中「" + sessionName + "」")
+                        : "后台任务执行中";
                 }
                 else
                 {
@@ -177,6 +196,7 @@ namespace AgentIsland
             {
                 { "source", "antigravity" },
                 { "kind", kind },
+                { "level", InferNotificationLevel(kind) },
                 { "conversationId", convId },
                 { "sessionName", sessionName },
                 { "project", project },
@@ -264,6 +284,7 @@ namespace AgentIsland
             {
                 { "source", "ClaudeCode" },
                 { "kind", kind },
+                { "level", InferNotificationLevel(kind) },
                 { "conversationId", convId },
                 { "sessionName", project },
                 { "project", project },
@@ -338,6 +359,7 @@ namespace AgentIsland
             {
                 { "source", "Codex" },
                 { "kind", kind },
+                { "level", InferNotificationLevel(kind) },
                 { "conversationId", convId },
                 { "sessionName", project },
                 { "project", project },
@@ -643,6 +665,23 @@ namespace AgentIsland
                 return candidate.Substring(idx + 1);
             }
             return string.IsNullOrWhiteSpace(candidate) ? fallback : candidate;
+        }
+
+        private static int InferNotificationLevel(string kind)
+        {
+            if (kind == "needs_approval") return 3;
+            if (kind == "needs_decision" || kind == "error") return 2;
+            if (kind == "needs_reply") return 1;
+            return 0;
+        }
+
+        private static string ExtractToolCallName(Dictionary<string, object> root)
+        {
+            object tcObj;
+            if (!root.TryGetValue("toolCall", out tcObj)) return "";
+            var tc = tcObj as Dictionary<string, object>;
+            if (tc == null) return "";
+            return GetString(tc, "name");
         }
 
         private static string ExtractQuestionSummary(Dictionary<string, object> root)
