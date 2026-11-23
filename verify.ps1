@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$Rebuild,
     [string]$OutDir = ""
 )
@@ -54,11 +54,41 @@ function Test-HookCase([string]$Name, [string[]]$ArgsList, [string]$StdinJson, [
     Write-Host ("  [{0}] {1,-22} exit={2} out='{3}' {4} ({5}ms)" -f $status, $Name, $code, $outStr, $detail, $sw.ElapsedMilliseconds)
 }
 
-# Antigravity (4 cases)
+# Antigravity (4 core + 2 decision-summary cases)
 Test-HookCase "AGY.PreInvocation" @("--adapter","antigravity","--event","PreInvocation") '{"conversationId":"c1","workspacePaths":["D:/proj/demo"],"hookEventName":"PreInvocation","lastUserInput":"hello"}' "{}" "antigravity" "working"
-Test-HookCase "AGY.AskQuestion"   @("--adapter","antigravity","--event","AskQuestion")   '{"conversationId":"c2","workspacePaths":["D:/proj/demo"],"hookEventName":"PreToolUse","toolCall":{"id":"t1","name":"ask_question","args":{"questions":[{"question":"Confirm deploy?"}]}}}' '{"decision":"allow"}' "antigravity" "needs_decision"
+Test-HookCase "AGY.AskQuestion"   @("--adapter","antigravity","--event","AskQuestion")   '{"conversationId":"c2","workspacePaths":["D:/proj/demo"],"hookEventName":"PreToolUse","toolCall":{"id":"t1","name":"ask_question","args":{"questions":[{"question":"Confirm deploy?","options":["(Recommended) Approve — push now","Skip"]}]}}}' '{"decision":"allow"}' "antigravity" "needs_decision"
 Test-HookCase "AGY.StopReply"     @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c3","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","lastUserInput":"fix corners"}' '{"decision":"allow"}' "antigravity" "needs_reply"
 Test-HookCase "AGY.StopError"     @("--adapter","antigravity","--event","Stop")          '{"conversationId":"c4","workspacePaths":["D:/proj/demo"],"hookEventName":"Stop","terminationReason":"ERROR","error":"timeout"}' '{"decision":"allow"}' "antigravity" "error"
+
+# Antigravity real session title + AI reply decision summary (must NOT echo lastUserInput!)
+$fakeAgyRoot = Join-Path $OutDir "fake-agy"
+$fakeAnnDir = Join-Path $fakeAgyRoot "annotations"
+$fakeLogsDir = Join-Path $fakeAgyRoot "brain\conv-ux\.system_generated\logs"
+New-Item -ItemType Directory -Force -Path $fakeAnnDir, $fakeLogsDir | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $fakeAnnDir "conv-ux.pbtxt"), 'title:"DynamicIslandUX" last_user_view_time:{seconds:1700000000 nanos:0}', (New-Object System.Text.UTF8Encoding($false)))
+$fakeTranscriptPath = Join-Path $fakeLogsDir "transcript.jsonl"
+$replyLine = '{"step_index":12,"type":"PLANNER_RESPONSE","status":"DONE","content":"All 31 checks passed on [verify.ps1](file:///D:/verify.ps1).\n\nShould we publish v0.1.1 right now?"}'
+[System.IO.File]::WriteAllText($fakeTranscriptPath, $replyLine + "`n", (New-Object System.Text.UTF8Encoding($false)))
+$dsBefore = @(Get-ChildItem $TestInbox -Filter "*.json" | Select-Object -ExpandProperty Name)
+$dsPayload = @{
+    conversationId = "conv-ux"
+    workspacePaths = @("D:/proj/AgentIsland")
+    hookEventName = "Stop"
+    terminationReason = "NO_TOOL_CALL"
+    lastUserInput = "echo_should_never_appear"
+    transcriptPath = $fakeTranscriptPath
+} | ConvertTo-Json -Compress
+$dsOut = $dsPayload | & $HookExe --adapter antigravity --event Stop
+$dsAfter = @(Get-ChildItem $TestInbox -Filter "*.json" | Where-Object { $dsBefore -notcontains $_.Name })
+$dsOk = $false
+$dsDetail = "newFiles=$($dsAfter.Count)"
+if ($dsAfter.Count -eq 1) {
+    $dEvt = Get-Content $dsAfter[0].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+    $dsOk = ($LASTEXITCODE -eq 0) -and ($dEvt.sessionName -eq "DynamicIslandUX") -and ($dEvt.summary -match "publish v0\.1\.1") -and ($dEvt.summary -notmatch "echo_should_never_appear")
+    $dsDetail = "session=$($dEvt.sessionName) summary=$($dEvt.summary)"
+}
+if (-not $dsOk) { $hookAllPass = $false }
+Write-Host ("  [{0}] {1,-22} {2}" -f ($(if($dsOk){"PASS"}else{"FAIL"}), "AGY.DecisionSummary", $dsDetail))
 
 # Claude Code (4 cases - stdout MUST be empty so PermissionRequest is never auto-approved!)
 Test-HookCase "Claude.PromptSubmit" @("--adapter","claude","--event","UserPromptSubmit")  '{"session_id":"s1","cwd":"D:/work/api-app","hook_event_name":"UserPromptSubmit","prompt":"refactor auth"}' "" "ClaudeCode" "working"

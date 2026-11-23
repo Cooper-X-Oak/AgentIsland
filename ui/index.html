@@ -237,7 +237,7 @@
 
     .muted-tag {
       font-size: 10.5px;
-      color: rgba(255, 255, 255, 0.5);
+      color: rgba(255, 255, 255, 0.52);
       font-variant-numeric: tabular-nums;
     }
 
@@ -286,6 +286,14 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .source-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: #a1a1aa;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .card-top-right {
@@ -339,6 +347,15 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
       word-break: break-word;
+    }
+
+    .toast-line {
+      font-size: 11px;
+      color: #fbbf24;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .sub-tip {
@@ -397,6 +414,7 @@
       background: rgba(255, 255, 255, 0.09);
       color: #f4f4f5;
       cursor: pointer;
+      flex-shrink: 0;
     }
 
     .switch-chip:hover {
@@ -575,6 +593,7 @@
         actionIndex: 0,
         snoozed: false,
         paused: false,
+        pauseRemainMinutes: 0,
         isLateNight: false
       },
       alerts: [],
@@ -583,14 +602,17 @@
       muted: false,
       view: "compact", // compact | agy | health | overview
       pinned: false,
+      manualHealthOpen: false,
       ctxOpen: false,
-      alertCursor: 0,
+      activeAlertId: "",
       countdown: {
         active: false,
+        paused: false,
         total: 0,
         remain: 0
       },
-      copyTip: ""
+      copyTip: "",
+      toastText: ""
     };
 
     const dock = document.getElementById("dock");
@@ -602,8 +624,11 @@
     let lastViewMode = "";
     let hoverOpenTimer = null;
     let hoverCloseTimer = null;
+    let softCollapseTimer = null;
+    let toastTimer = null;
     let countdownInterval = null;
     let hitRectTimer = null;
+    let pointerInsideDock = false;
 
     function postHost(msg) {
       try {
@@ -619,6 +644,36 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    function getSourceLabel(source) {
+      if (!source || source === "antigravity") return "AGY";
+      if (source === "ClaudeCode") return "Claude";
+      if (source === "Codex") return "Codex";
+      return source;
+    }
+
+    function getSessionLabel(item) {
+      if (!item) return "Agent";
+      return item.sessionName || item.project || getSourceLabel(item.source);
+    }
+
+    function getSubMeta(item) {
+      if (!item) return "";
+      const primary = getSessionLabel(item);
+      const src = item.source || "antigravity";
+      if (src !== "antigravity") {
+        const srcLabel = getSourceLabel(src);
+        return primary.toLowerCase() === srcLabel.toLowerCase() ? "" : ` · ${srcLabel}`;
+      }
+      if (item.project && item.project !== primary && item.project !== "Antigravity") {
+        return ` · ${item.project}`;
+      }
+      return "";
+    }
+
+    function isStrongKind(kind) {
+      return kind === "error" || kind === "needs_approval" || kind === "needs_decision";
     }
 
     function formatWait(ts) {
@@ -643,35 +698,60 @@
       return { color: "#3b82f6", textColor: "#ffffff", glow: "glow-blue", label: "等你回复" };
     }
 
+    function getActiveAlert() {
+      if (state.alerts.length === 0) {
+        state.activeAlertId = "";
+        return { item: null, idx: 0 };
+      }
+      let idx = state.alerts.findIndex(a => a.id === state.activeAlertId);
+      if (idx < 0) {
+        idx = 0;
+        state.activeAlertId = state.alerts[0].id;
+      }
+      return { item: state.alerts[idx], idx };
+    }
+
     function computeMainSize(view) {
-      if (view === "agy") return { w: 438, h: 132, r: 22 };
+      if (view === "agy") return { w: 438, h: state.toastText ? 148 : 132, r: 22 };
       if (view === "health") return { w: 438, h: 158, r: 22 };
-      if (view === "overview") return { w: 438, h: 226, r: 22 };
-      if (state.alerts.length > 0) return { w: 248, h: 36, r: 18 };
-      if (state.working.length > 0) return { w: 248, h: 36, r: 18 };
-      return { w: 184, h: 36, r: 18 };
+      if (view === "overview") return { w: 438, h: 230, r: 22 };
+      if (state.alerts.length > 0) return { w: 256, h: 36, r: 18 };
+      if (state.working.length > 0) return { w: 256, h: 36, r: 18 };
+      return { w: 190, h: 36, r: 18 };
     }
 
     function reportHitRectsNow() {
       const rects = [];
       const addRect = (el, pad) => {
-        if (!el) return;
+        if (!el) return null;
         const r = el.getBoundingClientRect();
         if (r.width > 4 && r.height > 4) {
-          rects.push({
+          const box = {
             x: Math.round(r.left - pad),
             y: Math.round(r.top - pad),
             w: Math.round(r.width + pad * 2),
             h: Math.round(r.height + pad * 2)
-          });
+          };
+          rects.push(box);
+          return box;
         }
+        return null;
       };
-      addRect(mainIsland, 1);
+      const mainBox = addRect(mainIsland, 1);
       if (state.view === "compact" && !healthOrb.classList.contains("hidden-orb")) {
         addRect(healthOrb, 1);
       }
       if (state.ctxOpen) {
-        addRect(ctxMenu, 2);
+        const ctxBox = addRect(ctxMenu, 2);
+        // Bridge the 8px vertical gap between pill/card and open context menu so moving downward never flickers
+        if (mainBox && ctxBox && ctxBox.y > mainBox.y + mainBox.h) {
+          rects.push({
+            x: Math.min(mainBox.x, ctxBox.x),
+            y: mainBox.y + mainBox.h - 1,
+            w: Math.max(mainBox.x + mainBox.w, ctxBox.x + ctxBox.w) - Math.min(mainBox.x, ctxBox.x),
+            h: ctxBox.y - (mainBox.y + mainBox.h) + 2
+          });
+        }
       }
       postHost({
         type: "hit_rects",
@@ -686,34 +766,99 @@
       hitRectTimer = setTimeout(reportHitRectsNow, 370);
     }
 
-    function stopCountdown() {
+    function clearSoftCollapseTimer() {
+      if (softCollapseTimer) {
+        clearTimeout(softCollapseTimer);
+        softCollapseTimer = null;
+      }
+    }
+
+    function armSoftCollapseTimer(delayMs) {
+      clearSoftCollapseTimer();
+      softCollapseTimer = setTimeout(() => {
+        softCollapseTimer = null;
+        if (state.view === "agy" && !state.pinned && !pointerInsideDock && !state.ctxOpen) {
+          const active = getActiveAlert().item;
+          if (!active || !isStrongKind(active.kind)) {
+            state.view = "compact";
+            render(true);
+          }
+        }
+      }, delayMs || 6000);
+    }
+
+    function showToast(text) {
+      state.toastText = text || "";
+      if (toastTimer) clearTimeout(toastTimer);
+      render(true);
+      if (state.toastText) {
+        toastTimer = setTimeout(() => {
+          toastTimer = null;
+          state.toastText = "";
+          render(true);
+        }, 2600);
+      }
+    }
+
+    // ==================== Countdown (True Pause / Resume) ====================
+
+    function resetCountdown() {
       if (countdownInterval) {
         clearInterval(countdownInterval);
         countdownInterval = null;
       }
       state.countdown.active = false;
+      state.countdown.paused = false;
+      state.countdown.total = 0;
       state.countdown.remain = 0;
     }
 
-    function startCountdown(seconds) {
-      stopCountdown();
+    function pauseCountdown() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+      state.countdown.active = false;
+      state.countdown.paused = state.countdown.remain > 0;
+      render(true);
+    }
+
+    function startOrResumeCountdown(seconds) {
+      if (state.countdown.active) {
+        pauseCountdown();
+        return;
+      }
+      if (!state.countdown.paused || state.countdown.remain <= 0) {
+        state.countdown.total = seconds;
+        state.countdown.remain = seconds;
+      }
       state.countdown.active = true;
-      state.countdown.total = seconds;
-      state.countdown.remain = seconds;
+      state.countdown.paused = false;
       state.pinned = true;
-      updateCountdownDom();
+      state.manualHealthOpen = true;
+      clearSoftCollapseTimer();
+      render(true);
+
       countdownInterval = setInterval(() => {
         state.countdown.remain--;
         if (state.countdown.remain <= 0) {
-          stopCountdown();
+          resetCountdown();
           postHost({ type: "play_done_chime" });
+          state.manualHealthOpen = false;
           state.health.alertActive = false;
           state.health.seatedSeconds = 0;
           state.health.snoozed = false;
           state.health.todayCount = (state.health.todayCount || 0) + 1;
           postHost({ type: "health_done" });
-          state.view = state.alerts.length > 0 ? "agy" : "compact";
-          state.pinned = state.alerts.length > 0;
+          if (state.alerts.length > 0) {
+            state.view = "agy";
+            const top = getActiveAlert().item;
+            state.pinned = !!(top && isStrongKind(top.kind));
+            if (!state.pinned) armSoftCollapseTimer(6000);
+          } else {
+            state.view = "compact";
+            state.pinned = false;
+          }
           render(true);
         } else {
           updateCountdownDom();
@@ -731,6 +876,8 @@
         fill.style.width = pct + "%";
       }
     }
+
+    // ==================== Render Helpers ====================
 
     function renderHealthOrb() {
       const showOrb = (state.view === "compact");
@@ -779,40 +926,83 @@
       const intervals = [30, 45, 50, 60].map(m =>
         `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
       ).join("");
+      const pauseLabel = state.health.paused
+        ? `▶ 恢复护腰提醒（剩 ${state.health.pauseRemainMinutes || 1}m）`
+        : "⏸ 暂停护腰 1 小时";
       ctxMenu.innerHTML = `
         <button class="ctx-btn" data-action="health-done"><span>✓ 刚站过（清零 + 今日打卡）</span><span class="meta-text">${state.health.todayCount}次</span></button>
         <div class="ctx-row"><span>⏱ 久坐间隔</span><div class="int-chips">${intervals}</div></div>
         <div class="ctx-sep"></div>
-        <button class="ctx-btn" data-action="toggle-pause"><span>${state.health.paused ? '▶ 恢复护腰提醒' : '⏸ 暂停护腰 1 小时'}</span></button>
+        <button class="ctx-btn" data-action="toggle-pause"><span>${pauseLabel}</span></button>
         <button class="ctx-btn" data-action="toggle-mute"><span>${state.muted ? '🔊 开启提示音' : '🔕 静音提示音'}</span></button>
         <button class="ctx-btn" data-action="open-health-pin"><span>🏋 立即做一组护腰动作</span></button>
         <div class="ctx-sep"></div>
         <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">关闭菜单</span><span class="meta-text">Alt+\\</span></button>`;
     }
 
+    // ==================== Priority Arbiter ====================
+
     function resolveAutoView(triggerExpand, focusKind) {
+      const countdownProtected = (state.view === "health" && (state.countdown.active || state.countdown.paused));
+
       if (triggerExpand) {
         state.ctxOpen = false;
+
         if (focusKind === "agy" && state.alerts.length > 0) {
+          // Never interrupt an active or paused health workout countdown!
+          if (countdownProtected) return;
+
+          const top = state.alerts[0];
+          const strong = isStrongKind(top.kind);
+
+          // If user is already inspecting a pinned alert card, don't yank their cursor unless a stronger alert arrived
+          if (state.view === "agy" && state.pinned && state.activeAlertId && !strong) {
+            if (state.alerts.some(a => a.id === state.activeAlertId)) {
+              return;
+            }
+          }
+
           state.view = "agy";
-          state.pinned = true;
-          state.alertCursor = 0;
+          state.activeAlertId = top.id;
+          state.manualHealthOpen = false;
+          if (strong) {
+            state.pinned = true;
+            clearSoftCollapseTimer();
+          } else {
+            state.pinned = false;
+            armSoftCollapseTimer(6000);
+          }
           return;
         }
+
         if (focusKind === "health" && state.health.alertActive) {
           state.view = "health";
           state.pinned = true;
+          state.manualHealthOpen = false;
+          clearSoftCollapseTimer();
           return;
         }
       }
 
+      // Guard: if viewing agy and queue became empty, step down cleanly
       if (state.view === "agy" && state.alerts.length === 0) {
+        clearSoftCollapseTimer();
+        state.activeAlertId = "";
         state.view = state.health.alertActive ? "health" : "compact";
         state.pinned = state.health.alertActive;
       }
-      if (state.view === "health" && !state.health.alertActive && !state.countdown.active) {
-        state.view = state.alerts.length > 0 ? "agy" : "compact";
-        state.pinned = state.alerts.length > 0;
+
+      // Guard: ONLY auto-close health if it was auto-opened (never yank a manually opened health card!)
+      if (state.view === "health" && !state.manualHealthOpen && !state.health.alertActive && !state.countdown.active && !state.countdown.paused) {
+        if (state.alerts.length > 0) {
+          const top = getActiveAlert().item;
+          state.view = "agy";
+          state.pinned = !!(top && isStrongKind(top.kind));
+          if (!state.pinned) armSoftCollapseTimer(6000);
+        } else {
+          state.view = "compact";
+          state.pinned = false;
+        }
       }
     }
 
@@ -823,7 +1013,14 @@
       mainIsland.style.borderRadius = target.r + "px";
 
       const viewChanged = (state.view !== lastViewMode);
-      if (viewChanged && lastViewMode === "health") stopCountdown();
+      if (viewChanged && lastViewMode === "health") {
+        resetCountdown();
+        state.manualHealthOpen = false;
+      }
+      if (viewChanged && lastViewMode === "agy") {
+        clearSoftCollapseTimer();
+        state.toastText = "";
+      }
       lastViewMode = state.view;
       const enterCls = viewChanged ? " content-enter" : "";
 
@@ -839,13 +1036,14 @@
         if (state.alerts.length > 0) {
           const top = state.alerts[0];
           const st = getAlertStyle(top.kind);
+          const sessionTitle = getSessionLabel(top);
           mainIsland.classList.add(st.glow);
-          renderKey = `compact-alert-${top.id}-${top.kind}-${state.alerts.length}`;
+          renderKey = `compact-alert-${top.id}-${top.kind}-${sessionTitle}-${state.alerts.length}`;
           html = `
-            <div class="pill-bar${enterCls}" data-action="open-agy-pin">
+            <div class="pill-bar${enterCls}" data-action="open-agy-pin" data-id="${escapeHtml(top.id)}">
               <div class="pill-left">
                 <span class="dot dot-pulse" style="background:${st.color}"></span>
-                <span class="pill-text">${escapeHtml(top.title || st.label)} · ${escapeHtml(top.project)}</span>
+                <span class="pill-text">${escapeHtml(top.title || st.label)} · ${escapeHtml(sessionTitle)}</span>
               </div>
               <div class="pill-right">
                 <span class="mini-badge" style="background:${st.color}26;color:${st.color}">${state.alerts.length}</span>
@@ -854,8 +1052,13 @@
         } else if (state.working.length > 0) {
           mainIsland.classList.add("glow-blue");
           const wCount = state.working.length;
-          const label = wCount === 1 ? `AGY 思考中 · ${state.working[0].project}` : `AGY 思考中 · ${wCount} 个会话`;
-          renderKey = `compact-work-${wCount}-${state.working[0].project}`;
+          const firstSrc = getSourceLabel(state.working[0].source);
+          const allSameSrc = state.working.every(w => getSourceLabel(w.source) === firstSrc);
+          const srcPrefix = allSameSrc ? firstSrc : "Agent";
+          const label = wCount === 1
+            ? `${srcPrefix} 思考中 · ${getSessionLabel(state.working[0])}`
+            : `${srcPrefix} 思考中 · ${wCount} 个会话`;
+          renderKey = `compact-work-${wCount}-${label}`;
           html = `
             <div class="pill-bar${enterCls}" data-action="open-overview-pin">
               <div class="pill-left">
@@ -872,7 +1075,7 @@
             <div class="pill-bar${enterCls}" data-action="open-overview-pin">
               <div class="pill-left">
                 <span class="dot" style="background:#22c55e"></span>
-                <span class="pill-text">AGY 待命</span>
+                <span class="pill-text">Agent 待命</span>
               </div>
               <div class="pill-right">
                 <span class="muted-tag">${state.muted ? "静音 · " : ""}救腰 ${state.health.todayCount}</span>
@@ -880,41 +1083,54 @@
             </div>`;
         }
       } else if (state.view === "agy") {
-        if (state.alerts.length === 0) {
+        const active = getActiveAlert();
+        if (!active.item) {
           state.view = "compact";
           return render(true);
         }
-        const idx = state.alertCursor % state.alerts.length;
-        const item = state.alerts[idx];
+        const item = active.item;
+        const idx = active.idx;
         const st = getAlertStyle(item.kind);
         mainIsland.classList.add(st.glow);
         const waitText = formatWait(item.timestamp);
-        const srcTag = (item.source && item.source !== "antigravity") ? ` · ${item.source}` : "";
+        const sessionTitle = getSessionLabel(item);
+        const subMeta = getSubMeta(item);
         const healthChip = state.health.alertActive
           ? `<button class="switch-chip" data-action="open-health-pin">🟢 护腰</button>`
           : "";
         const nextBtn = state.alerts.length > 1
           ? `<button class="btn btn-secondary" data-action="agy-next">下一条 (${idx + 1}/${state.alerts.length})</button>`
           : "";
-        renderKey = `agy-${item.id}-${item.kind}-${idx}-${state.alerts.length}-${waitText}-${state.health.alertActive}-${state.copyTip}`;
+        const focusLabel = (!item.source || item.source === "antigravity")
+          ? "直达该会话 ↗"
+          : ((item.source === "ClaudeCode" || item.source === "Codex") ? "切到终端 ↗" : "标记已读 ✓");
+        const toastHtml = state.toastText
+          ? `<div class="toast-line">⚠ ${escapeHtml(state.toastText)}</div>`
+          : "";
+
+        renderKey = `agy-${item.id}-${item.kind}-${sessionTitle}-${subMeta}-${item.summary}-${idx}-${state.alerts.length}-${waitText}-${state.health.alertActive}-${state.copyTip}-${state.toastText}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="badge" style="background:${st.color}24;color:${st.color};border-color:${st.color}55">${escapeHtml(item.title || st.label)}</span>
-                <span class="project-name">${escapeHtml(item.project + srcTag)}</span>
+                <span class="project-name">${escapeHtml(sessionTitle)}</span>
+                ${subMeta ? `<span class="source-sub">${escapeHtml(subMeta)}</span>` : ""}
               </div>
               <div class="card-top-right">
                 ${healthChip}
                 <span class="meta-text">${escapeHtml(waitText)}</span>
-                <button class="icon-btn" data-action="copy-alert" data-text="${escapeHtml(item.project + ' | ' + item.summary)}" title="复制摘要">${state.copyTip ? '✓' : '⧉'}</button>
+                <button class="icon-btn" data-action="copy-alert" data-text="${escapeHtml(sessionTitle + ' | ' + item.summary)}" title="复制摘要">${state.copyTip ? '✓' : '⧉'}</button>
                 <button class="icon-btn" data-action="collapse" title="收起">−</button>
               </div>
             </div>
-            <div class="summary">${escapeHtml(item.summary)}</div>
+            <div>
+              <div class="summary">${escapeHtml(item.summary)}</div>
+              ${toastHtml}
+            </div>
             <div class="actions">
               <button class="btn" style="background:${st.color};color:${st.textColor}" data-action="agy-focus" data-id="${escapeHtml(item.id)}">
-                ${!item.source || item.source === 'antigravity' ? '直达该会话 ↗' : ((item.source === 'ClaudeCode' || item.source === 'Codex') ? '切到终端 ↗' : '标记已读 ✓')}
+                ${focusLabel}
               </button>
               <div class="btn-group">
                 ${nextBtn}
@@ -926,27 +1142,36 @@
         mainIsland.classList.add("glow-green");
         const act = ACTIONS[state.health.actionIndex % ACTIONS.length];
         const agyChip = state.alerts.length > 0
-          ? `<button class="switch-chip" data-action="open-agy-pin">⚡ AGY (${state.alerts.length})</button>`
+          ? `<button class="switch-chip" data-action="open-agy-pin">⚡ 待介入 (${state.alerts.length})</button>`
           : "";
-        const nightText = state.health.isLateNight
+        const isDue = !!state.health.alertActive;
+        const badgeText = isDue ? `坐满 ${interval}m · 救腰` : "主动加练 · 救腰";
+        const metaText = state.health.isLateNight
           ? `已过凌晨 · 今日第 ${state.health.todayCount + 1} 次`
-          : `已连坐 ${Math.max(mins, interval)}m · 今日 ${state.health.todayCount} 次`;
-        const cdPct = state.countdown.active
+          : (isDue
+              ? `已连坐 ${Math.max(mins, interval)}m · 今日 ${state.health.todayCount} 次`
+              : `当前已坐 ${mins}m · 今日 ${state.health.todayCount} 次`);
+
+        const cdPct = (state.countdown.active || state.countdown.paused) && state.countdown.total > 0
           ? Math.round(((state.countdown.total - state.countdown.remain) / state.countdown.total) * 100)
           : 0;
-        const cdLabel = state.countdown.active
-          ? `跟练中 ${state.countdown.remain}s（点暂停）`
-          : `开始跟练 ${act.seconds}s ▶`;
-        renderKey = `health-${state.health.actionIndex}-${state.alerts.length}-${mins}-${state.health.todayCount}-${state.countdown.active}`;
+        let cdLabel = `开始跟练 ${act.seconds}s ▶`;
+        if (state.countdown.active) {
+          cdLabel = `跟练中 ${state.countdown.remain}s（点暂停）`;
+        } else if (state.countdown.paused) {
+          cdLabel = `已暂停 ${state.countdown.remain}s（继续 ▶）`;
+        }
+
+        renderKey = `health-${state.health.actionIndex}-${state.alerts.length}-${mins}-${isDue}-${state.health.todayCount}-${state.countdown.active}-${state.countdown.paused}-${state.countdown.remain}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
-                <span class="badge" style="background:rgba(34,197,94,0.2);color:#4ade80;border-color:rgba(34,197,94,0.45)">坐满 ${interval}m · 救腰</span>
+                <span class="badge" style="background:rgba(34,197,94,0.2);color:#4ade80;border-color:rgba(34,197,94,0.45)">${escapeHtml(badgeText)}</span>
               </div>
               <div class="card-top-right">
                 ${agyChip}
-                <span class="meta-text">${escapeHtml(nightText)}</span>
+                <span class="meta-text">${escapeHtml(metaText)}</span>
                 <button class="icon-btn" data-action="collapse" title="收起">−</button>
               </div>
             </div>
@@ -976,31 +1201,42 @@
         if (state.alerts.length > 0) {
           listHtml += state.alerts.slice(0, 2).map(a => {
             const st = getAlertStyle(a.kind);
+            const sName = getSessionLabel(a);
             return `<div class="ov-item">
-              <div class="ov-item-left"><span class="dot dot-pulse" style="background:${st.color}"></span><span class="ov-item-text"><strong>${escapeHtml(a.project)}</strong> · ${escapeHtml(a.title || st.label)}（${formatWait(a.timestamp)}）</span></div>
-              <button class="switch-chip" data-action="open-agy-pin">处理</button>
+              <div class="ov-item-left"><span class="dot dot-pulse" style="background:${st.color}"></span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(a.title || st.label)}（${formatWait(a.timestamp)}）</span></div>
+              <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">处理</button>
             </div>`;
           }).join("");
+          if (state.alerts.length > 2) {
+            listHtml += `<div class="ov-item">
+              <span class="meta-text">还有 ${state.alerts.length - 2} 条待介入通知</span>
+              <button class="switch-chip" data-action="agy-dismiss-all">全部已读</button>
+            </div>`;
+          }
         } else if (state.working.length > 0) {
           listHtml += state.working.slice(0, 2).map(w =>
             `<div class="ov-item">
-              <div class="ov-item-left"><span class="dot dot-pulse" style="background:#3b82f6"></span><span class="ov-item-text"><strong>${escapeHtml(w.project)}</strong> · 思考中</span></div>
+              <div class="ov-item-left"><span class="dot dot-pulse" style="background:#3b82f6"></span><span class="ov-item-text"><strong>${escapeHtml(getSessionLabel(w))}</strong> · ${escapeHtml(getSourceLabel(w.source))} 思考中</span></div>
               <span class="meta-text">运行中</span>
             </div>`
           ).join("");
         }
 
-        if (state.history.length > 0) {
+        if (state.history.length > 0 && state.alerts.length <= 2) {
           const h = state.history[0];
           listHtml += `<div class="ov-item">
-            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">最近已看：${escapeHtml(h.project)} · ${escapeHtml(h.title || h.summary)}</span></div>
+            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">最近已看：${escapeHtml(getSessionLabel(h))} · ${escapeHtml(h.title || h.summary)}</span></div>
             <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">恢复</button>
           </div>`;
         } else if (!listHtml) {
           listHtml = `<div class="ov-item"><span class="meta-text">暂无活跃或历史待介入会话 · 快捷键 Alt+\\ 随时唤出</span></div>`;
         }
 
-        renderKey = `ov-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}`;
+        const pauseText = state.health.paused
+          ? `（暂停剩 ${state.health.pauseRemainMinutes || 1}m）`
+          : "";
+
+        renderKey = `ov-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}-${state.health.pauseRemainMinutes}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
@@ -1010,13 +1246,13 @@
                 <span class="meta-text">· 今日救腰 ${state.health.todayCount} 次</span>
               </div>
               <div class="card-top-right">
-                <span class="meta-text">右键菜单 · Alt+\\</span>
+                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">全部已读</button>` : `<span class="meta-text">右键 · Alt+\\</span>`}
                 <button class="icon-btn" data-action="collapse" title="收起">−</button>
               </div>
             </div>
             <div class="ov-grid">
               <div class="ov-row">
-                <span>🪑 坐姿 <strong>${mins}/${curInt}m</strong>${state.health.paused ? '（已暂停）' : ''}</span>
+                <span>🪑 坐姿 <strong>${mins}/${curInt}m</strong>${pauseText}</span>
                 <div class="int-chips">${intervals}</div>
               </div>
               <div class="ov-list">${listHtml}</div>
@@ -1042,7 +1278,7 @@
       scheduleHitRectSync();
     }
 
-    // ==================== Hover Preview & Auto-Collapse ====================
+    // ==================== Hover Preview (Only When Alerts Exist) ====================
 
     function clearHoverTimers() {
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
@@ -1050,13 +1286,20 @@
     }
 
     dock.addEventListener("mouseenter", () => {
+      pointerInsideDock = true;
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
-      if (state.view === "compact" && !state.ctxOpen && !hoverOpenTimer) {
+      // Pause soft auto-collapse while reading the card
+      if (state.view === "agy" && softCollapseTimer) {
+        clearSoftCollapseTimer();
+      }
+      // Rule A1: Only auto-expand on hover when there are pending alerts (never accidentally pop 230px overview over browser tabs!)
+      if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0 && !hoverOpenTimer) {
         hoverOpenTimer = setTimeout(() => {
           hoverOpenTimer = null;
-          if (state.view === "compact" && !state.ctxOpen) {
+          if (state.view === "compact" && !state.ctxOpen && state.alerts.length > 0) {
             state.pinned = false;
-            state.view = state.alerts.length > 0 ? "agy" : "overview";
+            state.view = "agy";
+            state.activeAlertId = state.alerts[0].id;
             render(true);
           }
         }, 260);
@@ -1064,15 +1307,16 @@
     });
 
     dock.addEventListener("mouseleave", () => {
+      pointerInsideDock = false;
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
-      if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active) {
+      if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused) {
         hoverCloseTimer = setTimeout(() => {
           hoverCloseTimer = null;
-          if (!state.pinned && !state.ctxOpen && !state.countdown.active) {
+          if (!state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused && !pointerInsideDock) {
             state.view = "compact";
             render(true);
           }
-        }, 380);
+        }, 420);
       }
     });
 
@@ -1084,10 +1328,12 @@
       render(false);
     });
 
-    // Clicking health orb directly opens health break card (pinned)
+    // Clicking health orb directly opens health break card (manual & pinned)
     healthOrb.addEventListener("click", () => {
       clearHoverTimers();
+      clearSoftCollapseTimer();
       state.ctxOpen = false;
+      state.manualHealthOpen = true;
       state.view = "health";
       state.pinned = true;
       render(true);
@@ -1139,27 +1385,39 @@
 
       switch (action) {
         case "open-agy-pin":
+          clearSoftCollapseTimer();
           state.ctxOpen = false;
+          state.manualHealthOpen = false;
           state.view = "agy";
           state.pinned = true;
-          state.alertCursor = 0;
+          if (id) {
+            state.activeAlertId = id;
+          } else if (state.alerts.length > 0) {
+            state.activeAlertId = state.alerts[0].id;
+          }
           render(true);
           break;
         case "open-health-pin":
+          clearSoftCollapseTimer();
           state.ctxOpen = false;
+          state.manualHealthOpen = true;
           state.view = "health";
           state.pinned = true;
           render(true);
           break;
         case "open-overview-pin":
+          clearSoftCollapseTimer();
           state.ctxOpen = false;
+          state.manualHealthOpen = false;
           state.view = "overview";
           state.pinned = true;
           render(true);
           break;
         case "collapse":
-          stopCountdown();
+          resetCountdown();
+          clearSoftCollapseTimer();
           state.ctxOpen = false;
+          state.manualHealthOpen = false;
           state.pinned = false;
           state.view = "compact";
           render(true);
@@ -1169,67 +1427,88 @@
           render(false);
           break;
         case "agy-next":
+          clearSoftCollapseTimer();
           state.pinned = true;
-          state.alertCursor = (state.alertCursor + 1) % Math.max(1, state.alerts.length);
+          if (state.alerts.length > 1) {
+            const cur = getActiveAlert().idx;
+            state.activeAlertId = state.alerts[(cur + 1) % state.alerts.length].id;
+          }
           render(true);
           break;
         case "agy-focus":
-          state.alerts = state.alerts.filter(a => a.id !== id);
+          // Let host confirm window focus before archiving; if window not found, host keeps card & sends toast
+          clearSoftCollapseTimer();
+          state.pinned = true;
           postHost({ type: "agy_focus", id });
-          resolveAutoView(false, "");
-          render(true);
           break;
         case "agy-dismiss":
+          clearSoftCollapseTimer();
           state.alerts = state.alerts.filter(a => a.id !== id);
+          if (state.activeAlertId === id) state.activeAlertId = "";
           postHost({ type: "agy_dismiss", id });
           resolveAutoView(false, "");
           render(true);
           break;
+        case "agy-dismiss-all":
+          clearSoftCollapseTimer();
+          state.alerts = [];
+          state.activeAlertId = "";
+          postHost({ type: "agy_dismiss_all" });
+          resolveAutoView(false, "");
+          render(true);
+          break;
         case "history-restore":
+          clearSoftCollapseTimer();
           state.pinned = true;
           postHost({ type: "history_restore", id });
           break;
         case "copy-alert":
+          clearSoftCollapseTimer();
+          state.pinned = true;
           postHost({ type: "copy_text", text: target.getAttribute("data-text") || "" });
           state.copyTip = "ok";
           render(true);
           setTimeout(() => { state.copyTip = ""; render(true); }, 1200);
           break;
         case "health-countdown":
-          if (state.countdown.active) {
-            stopCountdown();
-            render(true);
-          } else {
-            const sec = parseInt(target.getAttribute("data-sec") || "30", 10);
-            startCountdown(sec);
-          }
+          startOrResumeCountdown(parseInt(target.getAttribute("data-sec") || "30", 10));
           break;
         case "health-done":
-          stopCountdown();
+          resetCountdown();
           state.ctxOpen = false;
+          state.manualHealthOpen = false;
           state.health.alertActive = false;
           state.health.seatedSeconds = 0;
           state.health.snoozed = false;
           state.health.todayCount = (state.health.todayCount || 0) + 1;
           postHost({ type: "health_done" });
-          state.view = state.alerts.length > 0 ? "agy" : "compact";
-          state.pinned = state.alerts.length > 0;
+          if (state.alerts.length > 0) {
+            state.view = "agy";
+            const top = getActiveAlert().item;
+            state.pinned = !!(top && isStrongKind(top.kind));
+            if (!state.pinned) armSoftCollapseTimer(6000);
+          } else {
+            state.view = "compact";
+            state.pinned = false;
+          }
           render(true);
           break;
         case "health-shuffle":
-          stopCountdown();
+          resetCountdown();
           state.pinned = true;
+          state.manualHealthOpen = true;
           state.health.actionIndex = (state.health.actionIndex + 1) % ACTIONS.length;
           postHost({ type: "health_shuffle" });
           render(true);
           break;
         case "health-snooze":
-          stopCountdown();
+          resetCountdown();
+          state.manualHealthOpen = false;
           state.health.alertActive = false;
           state.health.snoozed = true;
           postHost({ type: "health_snooze", minutes: 5 });
           state.view = state.alerts.length > 0 ? "agy" : "compact";
-          state.pinned = state.alerts.length > 0;
+          state.pinned = state.alerts.length > 0 && isStrongKind(getActiveAlert().item.kind);
           render(true);
           break;
         case "set-interval":
@@ -1267,19 +1546,36 @@
           state.muted = !!msg.muted;
           resolveAutoView(!!msg.triggerExpand, msg.focusKind || "");
           render(false);
+        } else if (msg.type === "toast") {
+          showToast(msg.text || "");
         } else if (msg.type === "command") {
           clearHoverTimers();
+          if (msg.command === "outside_click") {
+            if (state.ctxOpen) {
+              state.ctxOpen = false;
+              render(false);
+            }
+            return;
+          }
           state.ctxOpen = false;
           if (msg.command === "open_overview") {
+            clearSoftCollapseTimer();
+            state.manualHealthOpen = false;
             state.view = "overview";
             state.pinned = true;
             render(true);
           } else if (msg.command === "toggle_overview") {
             if (state.view === "compact") {
+              clearSoftCollapseTimer();
               state.view = state.alerts.length > 0 ? "agy" : (state.health.alertActive ? "health" : "overview");
               state.pinned = true;
+              if (state.view === "agy" && state.alerts.length > 0) {
+                state.activeAlertId = state.alerts[0].id;
+              }
             } else {
-              stopCountdown();
+              resetCountdown();
+              clearSoftCollapseTimer();
+              state.manualHealthOpen = false;
               state.view = "compact";
               state.pinned = false;
             }
@@ -1288,6 +1584,20 @@
         }
       });
     }
+
+    // White-box telemetry hook for automated UX regression verification
+    window.__uxDebug = () => ({
+      view: state.view,
+      pinned: state.pinned,
+      manualHealthOpen: state.manualHealthOpen,
+      ctxOpen: state.ctxOpen,
+      activeAlertId: state.activeAlertId,
+      countdownActive: state.countdown.active,
+      countdownPaused: state.countdown.paused,
+      countdownRemain: state.countdown.remain,
+      softAutoCollapseArmed: !!softCollapseTimer,
+      toastText: state.toastText
+    });
 
     render(true);
   </script>

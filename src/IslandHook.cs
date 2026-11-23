@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
 namespace AgentIsland
@@ -104,7 +105,10 @@ namespace AgentIsland
             if (string.IsNullOrEmpty(eventArg)) eventArg = hookEvent;
 
             string project = ExtractProjectName(root);
+            string annotationPath = ResolveAntigravityAnnotationPath(transcriptPath, convId);
+            string sessionName = ReadAntigravityTitle(annotationPath);
             string lastUserInput = CleanSnippet(GetString(root, "lastUserInput"), 90);
+
             string kind = null;
             string title = "";
             string summary = "";
@@ -113,7 +117,9 @@ namespace AgentIsland
             {
                 kind = "working";
                 title = "思考中";
-                summary = string.IsNullOrEmpty(lastUserInput) ? "正在执行任务" : lastUserInput;
+                summary = !string.IsNullOrEmpty(sessionName)
+                    ? ("正在处理「" + sessionName + "」")
+                    : "正在执行任务";
             }
             else if (string.Equals(eventArg, "AskQuestion", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(eventArg, "PreToolUse", StringComparison.OrdinalIgnoreCase))
@@ -123,13 +129,13 @@ namespace AgentIsland
                 summary = ExtractQuestionSummary(root);
                 if (string.IsNullOrEmpty(summary))
                 {
-                    summary = string.IsNullOrEmpty(lastUserInput) ? "弹出选择卡，需要你的决定" : lastUserInput;
+                    summary = "弹出选择卡，需要你的决定";
                 }
             }
             else if (string.Equals(eventArg, "Stop", StringComparison.OrdinalIgnoreCase))
             {
                 string reason = GetString(root, "terminationReason");
-                string err = CleanSnippet(GetString(root, "error"), 110);
+                string err = CleanSnippet(GetString(root, "error"), 115);
 
                 if (string.Equals(reason, "USER_CANCELED", StringComparison.OrdinalIgnoreCase))
                 {
@@ -141,7 +147,7 @@ namespace AgentIsland
                 {
                     kind = "error";
                     title = "报错卡住";
-                    summary = string.IsNullOrEmpty(err) ? "执行遇到异常，请检查会话" : err;
+                    summary = string.IsNullOrEmpty(err) ? "执行遇到异常，请检查会话" : CleanErrorLine(err, 115);
                 }
                 else
                 {
@@ -155,9 +161,13 @@ namespace AgentIsland
                     {
                         title = "等你回复";
                     }
-                    summary = string.IsNullOrEmpty(lastUserInput)
-                        ? "本轮回复已完成，等你下一步指示"
-                        : ("关于「" + lastUserInput + "」已就绪，等你回复");
+
+                    // Extract what the AI actually said / asked instead of echoing user's own prompt
+                    string lastReply = ReadLastAssistantReply(serializer, transcriptPath);
+                    string distilled = ExtractDecisionSummary(lastReply, 112);
+                    summary = !string.IsNullOrEmpty(distilled)
+                        ? distilled
+                        : "本轮回复已完成，等你下一步指示";
                 }
             }
 
@@ -168,11 +178,13 @@ namespace AgentIsland
                 { "source", "antigravity" },
                 { "kind", kind },
                 { "conversationId", convId },
+                { "sessionName", sessionName },
                 { "project", project },
                 { "title", title },
                 { "summary", summary },
                 { "lastUserInput", lastUserInput },
                 { "transcriptPath", transcriptPath },
+                { "annotationPath", annotationPath },
                 { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
             });
         }
@@ -199,8 +211,7 @@ namespace AgentIsland
             {
                 kind = "working";
                 title = "思考中";
-                string prompt = CleanSnippet(GetString(root, "prompt"), 80);
-                summary = string.IsNullOrEmpty(prompt) ? "Claude Code 正在执行任务" : prompt;
+                summary = "Claude Code 正在执行任务";
             }
             else if (string.Equals(ev, "PermissionRequest", StringComparison.OrdinalIgnoreCase))
             {
@@ -209,7 +220,7 @@ namespace AgentIsland
                 string toolName = GetString(root, "tool_name");
                 string detail = ExtractToolInputBrief(root);
                 if (!string.IsNullOrEmpty(toolName) && !string.IsNullOrEmpty(detail))
-                    summary = toolName + ": " + detail;
+                    summary = "请求批准 " + toolName + "：" + detail;
                 else if (!string.IsNullOrEmpty(toolName))
                     summary = "请求批准工具调用：" + toolName;
                 else
@@ -218,7 +229,7 @@ namespace AgentIsland
             else if (string.Equals(ev, "Notification", StringComparison.OrdinalIgnoreCase))
             {
                 string ntype = GetString(root, "notification_type");
-                string msg = CleanSnippet(GetString(root, "message"), 100);
+                string msg = ExtractDecisionSummary(GetString(root, "message"), 110);
                 if (string.Equals(ntype, "permission_prompt", StringComparison.OrdinalIgnoreCase))
                 {
                     kind = "needs_approval";
@@ -235,7 +246,7 @@ namespace AgentIsland
             {
                 kind = "error";
                 title = "报错卡住";
-                string err = CleanSnippet(GetString(root, "error"), 100);
+                string err = CleanErrorLine(GetString(root, "error"), 110);
                 summary = !string.IsNullOrEmpty(err) ? err : "Claude Code 执行中断或报错";
             }
             else if (string.Equals(ev, "Stop", StringComparison.OrdinalIgnoreCase))
@@ -243,7 +254,7 @@ namespace AgentIsland
                 if (GetBool(root, "stop_hook_active")) return;
                 kind = "needs_reply";
                 title = "等你回复";
-                string lastMsg = CleanSnippet(GetString(root, "last_assistant_message"), 96);
+                string lastMsg = ExtractDecisionSummary(GetString(root, "last_assistant_message"), 112);
                 summary = !string.IsNullOrEmpty(lastMsg) ? lastMsg : "Claude Code 本轮回复已完成";
             }
 
@@ -254,6 +265,7 @@ namespace AgentIsland
                 { "source", "ClaudeCode" },
                 { "kind", kind },
                 { "conversationId", convId },
+                { "sessionName", project },
                 { "project", project },
                 { "title", title },
                 { "summary", summary },
@@ -287,8 +299,7 @@ namespace AgentIsland
             {
                 kind = "working";
                 title = "思考中";
-                string prompt = CleanSnippet(GetString(root, "prompt"), 80);
-                summary = string.IsNullOrEmpty(prompt) ? "Codex 正在执行任务" : prompt;
+                summary = "Codex 正在执行任务";
             }
             else if (string.Equals(ev, "PermissionRequest", StringComparison.OrdinalIgnoreCase))
             {
@@ -297,7 +308,7 @@ namespace AgentIsland
                 string toolName = GetString(root, "tool_name");
                 string detail = ExtractToolInputBrief(root);
                 if (!string.IsNullOrEmpty(toolName) && !string.IsNullOrEmpty(detail))
-                    summary = toolName + ": " + detail;
+                    summary = "请求批准 " + toolName + "：" + detail;
                 else if (!string.IsNullOrEmpty(toolName))
                     summary = "Codex 请求批准：" + toolName;
                 else
@@ -315,8 +326,9 @@ namespace AgentIsland
                 if (GetBool(root, "stop_hook_active")) return;
                 kind = "needs_reply";
                 title = "等你回复";
-                string lastMsg = CleanSnippet(GetString(root, "last-assistant-message"), 96);
-                if (string.IsNullOrEmpty(lastMsg)) lastMsg = CleanSnippet(GetString(root, "last_assistant_message"), 96);
+                string rawLast = GetString(root, "last-assistant-message");
+                if (string.IsNullOrEmpty(rawLast)) rawLast = GetString(root, "last_assistant_message");
+                string lastMsg = ExtractDecisionSummary(rawLast, 112);
                 summary = !string.IsNullOrEmpty(lastMsg) ? lastMsg : "Codex 本轮任务已完成，等你下一步指示";
             }
 
@@ -327,11 +339,232 @@ namespace AgentIsland
                 { "source", "Codex" },
                 { "kind", kind },
                 { "conversationId", convId },
+                { "sessionName", project },
                 { "project", project },
                 { "title", title },
                 { "summary", summary },
                 { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
             });
+        }
+
+        // ==================== Antigravity Metadata & Transcript Extraction ====================
+
+        private static string ResolveAntigravityAnnotationPath(string transcriptPath, string convId)
+        {
+            if (string.IsNullOrWhiteSpace(convId) || convId == "default") return "";
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(transcriptPath))
+                {
+                    string dir = Path.GetDirectoryName(transcriptPath);
+                    for (int depth = 0; depth < 6 && !string.IsNullOrEmpty(dir); depth++)
+                    {
+                        string name = Path.GetFileName(dir);
+                        if (string.Equals(name, "brain", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string appDataRoot = Path.GetDirectoryName(dir);
+                            if (!string.IsNullOrEmpty(appDataRoot))
+                            {
+                                string candidate = Path.Combine(appDataRoot, "annotations", convId + ".pbtxt");
+                                if (File.Exists(candidate)) return candidate;
+                            }
+                            break;
+                        }
+                        dir = Path.GetDirectoryName(dir);
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (!string.IsNullOrEmpty(userHome))
+                {
+                    string fallback = Path.Combine(userHome, ".gemini", "antigravity", "annotations", convId + ".pbtxt");
+                    if (File.Exists(fallback)) return fallback;
+                }
+            }
+            catch { }
+
+            return "";
+        }
+
+        private static string ReadAntigravityTitle(string annotationPath)
+        {
+            if (string.IsNullOrWhiteSpace(annotationPath) || !File.Exists(annotationPath)) return "";
+            try
+            {
+                string raw = File.ReadAllText(annotationPath, Encoding.UTF8);
+                Match m = Regex.Match(raw, @"title\s*:\s*""((?:\\.|[^""\\])*)""");
+                if (m.Success)
+                {
+                    string decoded = UnescapePbtxtString(m.Groups[1].Value);
+                    return CleanSnippet(decoded, 42);
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private static string UnescapePbtxtString(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var bytes = new List<byte>();
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (s[i] == '\\' && i + 1 < s.Length)
+                {
+                    char next = s[i + 1];
+                    if (next >= '0' && next <= '7' && i + 3 < s.Length &&
+                        s[i + 2] >= '0' && s[i + 2] <= '7' &&
+                        s[i + 3] >= '0' && s[i + 3] <= '7')
+                    {
+                        int oct = ((next - '0') << 6) | ((s[i + 2] - '0') << 3) | (s[i + 3] - '0');
+                        bytes.Add((byte)(oct & 0xFF));
+                        i += 3;
+                        continue;
+                    }
+                    i++;
+                    char c = next;
+                    if (next == 'n') c = ' ';
+                    else if (next == 'r') c = ' ';
+                    else if (next == 't') c = ' ';
+                    bytes.AddRange(Encoding.UTF8.GetBytes(new[] { c }));
+                }
+                else
+                {
+                    bytes.AddRange(Encoding.UTF8.GetBytes(new[] { s[i] }));
+                }
+            }
+            return Encoding.UTF8.GetString(bytes.ToArray());
+        }
+
+        private static string ReadLastAssistantReply(JavaScriptSerializer serializer, string transcriptPath)
+        {
+            if (string.IsNullOrWhiteSpace(transcriptPath) || !File.Exists(transcriptPath)) return "";
+            try
+            {
+                using (var fs = new FileStream(transcriptPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    if (fs.Length == 0) return "";
+                    long readLen = Math.Min(fs.Length, 65536);
+                    fs.Seek(-readLen, SeekOrigin.End);
+                    byte[] buf = new byte[readLen];
+                    int n = fs.Read(buf, 0, buf.Length);
+                    string chunk = Encoding.UTF8.GetString(buf, 0, n);
+                    string[] lines = chunk.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    for (int i = lines.Length - 1; i >= 0; i--)
+                    {
+                        string t = lines[i].Trim();
+                        if (!t.StartsWith("{") || !t.EndsWith("}")) continue;
+                        if (t.IndexOf("\"PLANNER_RESPONSE\"", StringComparison.Ordinal) < 0) continue;
+                        var obj = serializer.DeserializeObject(t) as Dictionary<string, object>;
+                        if (obj == null) continue;
+                        if (!string.Equals(GetString(obj, "type"), "PLANNER_RESPONSE", StringComparison.OrdinalIgnoreCase)) continue;
+                        string content = GetString(obj, "content");
+                        if (!string.IsNullOrWhiteSpace(content))
+                        {
+                            return content;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private static string ExtractDecisionSummary(string rawText, int maxLen)
+        {
+            if (string.IsNullOrWhiteSpace(rawText)) return "";
+
+            string text = rawText;
+            // Remove fenced code blocks, embedded artifacts, and HTML tags
+            text = Regex.Replace(text, @"```[\s\S]*?```", " ");
+            text = Regex.Replace(text, @"<agent-embed[\s\S]*?</agent-embed>", " ", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"<[^>]+>", " ");
+            // Convert markdown links [label](url) -> label, strip raw URLs
+            text = Regex.Replace(text, @"\[([^\]]+)\]\([^)]+\)", "$1");
+            text = Regex.Replace(text, @"(?:https?|file)://\S+", "");
+
+            string[] rawLines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var cleanLines = new List<string>();
+            foreach (string rawLine in rawLines)
+            {
+                string line = rawLine.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+                // Skip markdown table dividers and horizontal rules
+                if (Regex.IsMatch(line, @"^[\|\-:\s\*_]+$")) continue;
+                if (line.StartsWith("|") && line.EndsWith("|")) continue;
+
+                // Strip leading markdown headers, bullets, quotes
+                line = Regex.Replace(line, @"^(?:[#>\-\*\+•]+\s*|\d+\.\s+)", "");
+                line = line.Replace("**", "").Replace("__", "").Replace("`", "");
+                line = Regex.Replace(line, @"\s+", " ").Trim();
+                if (line.Length < 4) continue;
+                cleanLines.Add(line);
+            }
+
+            if (cleanLines.Count == 0) return "";
+
+            // Split into sentences to prioritize direct questions asked to the user
+            var sentences = new List<string>();
+            foreach (string line in cleanLines)
+            {
+                string[] parts = Regex.Split(line, @"(?<=[。！？?!])");
+                foreach (string part in parts)
+                {
+                    string s = part.Trim();
+                    if (s.Length >= 4) sentences.Add(s);
+                }
+            }
+
+            // Look backwards for the clearest question directed at the user
+            string lastQuestion = "";
+            for (int i = sentences.Count - 1; i >= 0; i--)
+            {
+                string s = sentences[i];
+                if ((s.EndsWith("？") || s.EndsWith("?")) && s.Length >= 6)
+                {
+                    lastQuestion = s;
+                    break;
+                }
+            }
+
+            string firstLine = cleanLines[0];
+            if (!string.IsNullOrEmpty(lastQuestion))
+            {
+                // Lead with what the AI is asking so user can decide immediately
+                string prefix = "待你回复：" + lastQuestion;
+                if (prefix.Length >= maxLen - 14 || firstLine.IndexOf(lastQuestion, StringComparison.Ordinal) >= 0)
+                {
+                    return CleanSnippet(prefix, maxLen);
+                }
+                string combined = prefix + "（" + CleanSnippet(firstLine, Math.Max(18, maxLen - prefix.Length - 2)) + "）";
+                return CleanSnippet(combined, maxLen);
+            }
+
+            // Otherwise combine leading conclusion sentences
+            string joined = firstLine;
+            if (joined.Length < 46 && cleanLines.Count > 1)
+            {
+                joined = joined.TrimEnd('。', '；', ':', '：') + " · " + cleanLines[1];
+            }
+            return CleanSnippet(joined, maxLen);
+        }
+
+        private static string CleanErrorLine(string err, int maxLen)
+        {
+            if (string.IsNullOrWhiteSpace(err)) return "";
+            string[] lines = err.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string l = lines[i].Trim();
+                if (l.Length >= 4 && !l.StartsWith("at ")) return CleanSnippet(l, maxLen);
+            }
+            return CleanSnippet(err, maxLen);
         }
 
         // ==================== Helpers ====================
@@ -436,15 +669,43 @@ namespace AgentIsland
                 var qDict = item as Dictionary<string, object>;
                 if (qDict != null)
                 {
-                    string qText = CleanSnippet(GetString(qDict, "question"), 96);
+                    string qText = CleanSnippet(GetString(qDict, "question"), 76);
                     if (!string.IsNullOrEmpty(qText))
                     {
-                        parts.Add(qText);
+                        string optPreview = ExtractOptionPreview(qDict);
+                        parts.Add(string.IsNullOrEmpty(optPreview) ? qText : (qText + "（" + optPreview + "）"));
                     }
                 }
                 if (parts.Count >= 2) break;
             }
-            return string.Join(" / ", parts.ToArray());
+            return CleanSnippet(string.Join(" / ", parts.ToArray()), 115);
+        }
+
+        private static string ExtractOptionPreview(Dictionary<string, object> qDict)
+        {
+            object optsObj;
+            if (!qDict.TryGetValue("options", out optsObj)) return "";
+            IEnumerable opts = optsObj as IEnumerable;
+            if (opts == null) return "";
+
+            var labels = new List<string>();
+            foreach (object o in opts)
+            {
+                if (o == null) continue;
+                string raw = o.ToString().Trim();
+                if (raw.StartsWith("(Recommended)", StringComparison.OrdinalIgnoreCase))
+                {
+                    raw = raw.Substring("(Recommended)".Length).Trim();
+                }
+                int dashIdx = raw.IndexOf(" — ", StringComparison.Ordinal);
+                if (dashIdx > 0) raw = raw.Substring(0, dashIdx).Trim();
+                int colonIdx = raw.IndexOf("：", StringComparison.Ordinal);
+                if (colonIdx > 0 && colonIdx <= 18) raw = raw.Substring(0, colonIdx).Trim();
+                string shortLabel = CleanSnippet(raw, 16);
+                if (!string.IsNullOrEmpty(shortLabel)) labels.Add(shortLabel);
+                if (labels.Count >= 3) break;
+            }
+            return string.Join(" / ", labels.ToArray());
         }
 
         private static string GetString(Dictionary<string, object> dict, string key)

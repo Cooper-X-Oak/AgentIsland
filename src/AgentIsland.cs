@@ -11,6 +11,7 @@ using System.Linq;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
@@ -125,7 +126,8 @@ namespace AgentIsland
     internal sealed class SessionItem
     {
         public string ConversationId;
-        public string Source; // antigravity | cli | ...
+        public string Source; // antigravity | ClaudeCode | Codex | cli | ...
+        public string SessionName; // Real conversation title (e.g. from annotations/*.pbtxt)
         public string Project;
         public string Kind; // working | needs_approval | needs_decision | needs_reply | error
         public string Title;
@@ -133,6 +135,7 @@ namespace AgentIsland
         public string LastUserInput;
         public string SearchQuery;
         public string TranscriptPath;
+        public string AnnotationPath;
         public string ApprovalStepKey;
         public long Timestamp;
     }
@@ -352,6 +355,12 @@ namespace AgentIsland
         [DllImport("user32.dll")]
         private static extern uint GetDpiForWindow(IntPtr hwnd);
 
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+
         private readonly JavaScriptSerializer _json = new JavaScriptSerializer { MaxJsonLength = 4 * 1024 * 1024 };
         private readonly string _appDataDir;
         private readonly string _inboxDir;
@@ -381,6 +390,7 @@ namespace AgentIsland
         private bool _trackingMouseLeave = false;
         private bool _hotkeysRegistered = false;
         private bool _clickThrough = true;
+        private bool _wasOutsideMouseDown = false;
 
         // Native smooth horizontal dragging
         private bool _nativeDragging = false;
@@ -552,6 +562,7 @@ namespace AgentIsland
             bool inside = IsPointInsideAnyHitRect(pt.X, pt.Y);
             if (inside)
             {
+                _wasOutsideMouseDown = false;
                 if (_clickThrough)
                 {
                     SetClickThrough(false);
@@ -590,6 +601,15 @@ namespace AgentIsland
                     _trackingMouseLeave = false;
                     SetClickThrough(true);
                 }
+
+                // Detect mouse clicks anywhere outside the island so inline context menu closes like a native menu
+                bool outsideDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+                                || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+                if (outsideDown && !_wasOutsideMouseDown)
+                {
+                    SendCommandToUi("outside_click");
+                }
+                _wasOutsideMouseDown = outsideDown;
             }
         }
 
@@ -788,6 +808,7 @@ namespace AgentIsland
             int maxX = screen.Right - physW;
             if (targetX < minX) targetX = minX;
             if (targetX > maxX) targetX = maxX;
+            _settings.OffsetX = (int)Math.Round((targetX - centerX) / scale);
 
             this.SetBounds(targetX, screen.Top + topMargin, physW, physH);
 
@@ -861,10 +882,7 @@ namespace AgentIsland
                     var topAlert = GetSortedAlerts().FirstOrDefault();
                     if (topAlert != null)
                     {
-                        ArchiveAndRemoveSession(topAlert.ConversationId);
-                        JumpToAntigravityConversation(topAlert);
-                        UpdateTrayTooltip();
-                        PushStateToUi(false, null);
+                        HandleFocusAlert(topAlert.ConversationId);
                     }
                     else
                     {
@@ -1290,6 +1308,44 @@ namespace AgentIsland
             }
         }
 
+        private bool CheckViewedSessions()
+        {
+            bool anyCleared = false;
+            foreach (var session in _sessions.Values.ToList())
+            {
+                if (session.Kind == "working") continue;
+                if (string.IsNullOrEmpty(session.AnnotationPath) || !File.Exists(session.AnnotationPath)) continue;
+
+                long viewedMs = ReadAnnotationLastViewMs(session.AnnotationPath);
+                if (viewedMs > session.Timestamp + 2500)
+                {
+                    Log("AutoCleared viewed session | conv=" + session.ConversationId + " | title=" + (session.SessionName ?? session.Project));
+                    ArchiveAndRemoveSession(session.ConversationId);
+                    anyCleared = true;
+                }
+            }
+            return anyCleared;
+        }
+
+        private static long ReadAnnotationLastViewMs(string annotationPath)
+        {
+            try
+            {
+                string raw = File.ReadAllText(annotationPath, Encoding.UTF8);
+                Match m = Regex.Match(raw, @"last_user_view_time\s*:\s*\{[^}]*seconds\s*:\s*(\d+)");
+                if (m.Success)
+                {
+                    long sec;
+                    if (long.TryParse(m.Groups[1].Value, out sec))
+                    {
+                        return sec * 1000L;
+                    }
+                }
+            }
+            catch { }
+            return 0;
+        }
+
         private void OnHealthAndRadarTick(object sender, EventArgs e)
         {
             EnsureTodayCounter();
@@ -1300,6 +1356,9 @@ namespace AgentIsland
                 UpdateTrayTooltip();
                 return;
             }
+
+            // 1.5 Auto-dismiss Antigravity alerts once the user has switched into and viewed that session
+            CheckViewedSessions();
 
             // 2. Clean stale "working" sessions older than 25 minutes
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -1568,32 +1627,44 @@ namespace AgentIsland
                     }
 
                     string prevTranscript = "";
+                    string prevAnnotation = "";
+                    string prevSessionName = "";
                     string prevQuery = "";
                     SessionItem prev;
                     if (_sessions.TryGetValue(convId, out prev) && prev != null)
                     {
                         prevTranscript = prev.TranscriptPath ?? "";
+                        prevAnnotation = prev.AnnotationPath ?? "";
+                        prevSessionName = prev.SessionName ?? "";
                         prevQuery = prev.SearchQuery ?? "";
                     }
 
                     string newTranscript = GetStr(dict, "transcriptPath");
                     string resolvedTranscript = string.IsNullOrEmpty(newTranscript) ? prevTranscript : newTranscript;
+                    string newAnnotation = GetStr(dict, "annotationPath");
+                    string resolvedAnnotation = string.IsNullOrEmpty(newAnnotation) ? prevAnnotation : newAnnotation;
+                    string newSessionName = GetStr(dict, "sessionName");
+                    string resolvedSessionName = string.IsNullOrEmpty(newSessionName) ? prevSessionName : newSessionName;
+
                     string lastInput = GetStr(dict, "lastUserInput");
                     string src = GetStr(dict, "source");
+                    string projectStr = string.IsNullOrEmpty(GetStr(dict, "project")) ? "Antigravity" : GetStr(dict, "project");
                     string summaryStr = GetStr(dict, "summary");
-                    string searchQuery = ResolveSearchQuery(lastInput, resolvedTranscript, prevQuery, summaryStr);
+                    string searchQuery = ResolveSearchQuery(resolvedSessionName, lastInput, resolvedTranscript, prevQuery, summaryStr);
 
                     var item = new SessionItem
                     {
                         ConversationId = convId,
                         Source = string.IsNullOrEmpty(src) ? "antigravity" : src,
-                        Project = string.IsNullOrEmpty(GetStr(dict, "project")) ? "Antigravity" : GetStr(dict, "project"),
+                        SessionName = resolvedSessionName,
+                        Project = projectStr,
                         Kind = kind,
                         Title = GetStr(dict, "title"),
                         Summary = summaryStr,
                         LastUserInput = lastInput,
                         SearchQuery = searchQuery,
                         TranscriptPath = resolvedTranscript,
+                        AnnotationPath = resolvedAnnotation,
                         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                     };
 
@@ -1658,6 +1729,7 @@ namespace AgentIsland
                 {
                     { "id", s.ConversationId },
                     { "source", s.Source ?? "antigravity" },
+                    { "sessionName", !string.IsNullOrEmpty(s.SessionName) ? s.SessionName : s.Project },
                     { "project", s.Project },
                     { "kind", s.Kind },
                     { "title", s.Title },
@@ -1673,6 +1745,7 @@ namespace AgentIsland
                 {
                     { "id", s.ConversationId },
                     { "source", s.Source ?? "antigravity" },
+                    { "sessionName", !string.IsNullOrEmpty(s.SessionName) ? s.SessionName : s.Project },
                     { "project", s.Project },
                     { "summary", s.Summary },
                     { "timestamp", s.Timestamp }
@@ -1684,6 +1757,7 @@ namespace AgentIsland
                 {
                     { "id", s.ConversationId },
                     { "source", s.Source ?? "antigravity" },
+                    { "sessionName", !string.IsNullOrEmpty(s.SessionName) ? s.SessionName : s.Project },
                     { "project", s.Project },
                     { "kind", s.Kind },
                     { "title", s.Title },
@@ -1694,6 +1768,9 @@ namespace AgentIsland
 
             int hour = DateTime.Now.Hour;
             bool isLateNight = (hour >= 1 && hour < 6);
+            int pauseRemainMinutes = (_pausedUntil.HasValue && DateTime.Now < _pausedUntil.Value)
+                ? Math.Max(1, (int)Math.Ceiling((_pausedUntil.Value - DateTime.Now).TotalMinutes))
+                : 0;
 
             var payload = new Dictionary<string, object>
             {
@@ -1709,7 +1786,8 @@ namespace AgentIsland
                         { "alertActive", _healthAlertActive },
                         { "actionIndex", _actionIndex },
                         { "snoozed", _snoozedUntil.HasValue && DateTime.Now < _snoozedUntil.Value },
-                        { "paused", _pausedUntil.HasValue && DateTime.Now < _pausedUntil.Value },
+                        { "paused", pauseRemainMinutes > 0 },
+                        { "pauseRemainMinutes", pauseRemainMinutes },
                         { "isLateNight", isLateNight }
                     }
                 },
@@ -1731,6 +1809,18 @@ namespace AgentIsland
             {
                 { "type", "command" },
                 { "command", command }
+            };
+            try { _coreWebView.PostWebMessageAsJson(_json.Serialize(payload)); }
+            catch { }
+        }
+
+        private void SendToastToUi(string text)
+        {
+            if (!_webReady || _coreWebView == null || string.IsNullOrEmpty(text)) return;
+            var payload = new Dictionary<string, object>
+            {
+                { "type", "toast" },
+                { "text", text }
             };
             try { _coreWebView.PostWebMessageAsJson(_json.Serialize(payload)); }
             catch { }
@@ -1812,21 +1902,21 @@ namespace AgentIsland
                         break;
 
                     case "agy_focus":
-                        string focusId = GetStr(msg, "id");
-                        SessionItem targetSession = null;
-                        if (!string.IsNullOrEmpty(focusId))
-                        {
-                            _sessions.TryGetValue(focusId, out targetSession);
-                            ArchiveAndRemoveSession(focusId);
-                        }
-                        JumpToAntigravityConversation(targetSession);
-                        UpdateTrayTooltip();
-                        PushStateToUi(false, null);
+                        HandleFocusAlert(GetStr(msg, "id"));
                         break;
 
                     case "agy_dismiss":
                         string dismissId = GetStr(msg, "id");
                         ArchiveAndRemoveSession(dismissId);
+                        UpdateTrayTooltip();
+                        PushStateToUi(false, null);
+                        break;
+
+                    case "agy_dismiss_all":
+                        foreach (var alertItem in GetSortedAlerts())
+                        {
+                            ArchiveAndRemoveSession(alertItem.ConversationId);
+                        }
                         UpdateTrayTooltip();
                         PushStateToUi(false, null);
                         break;
@@ -1887,8 +1977,14 @@ namespace AgentIsland
 
         // ==================== Focus & Jump to Exact Antigravity Conversation ====================
 
-        private string ResolveSearchQuery(string lastUserInput, string transcriptPath, string prevQuery, string fallbackSummary)
+        private string ResolveSearchQuery(string sessionName, string lastUserInput, string transcriptPath, string prevQuery, string fallbackSummary)
         {
+            string cleanedTitle = CleanSearchPhrase(sessionName);
+            if (cleanedTitle.Length >= 2)
+            {
+                return cleanedTitle;
+            }
+
             string cleaned = CleanSearchPhrase(lastUserInput);
             if (cleaned.Length >= 6)
             {
@@ -2089,22 +2185,64 @@ namespace AgentIsland
             return target;
         }
 
-        private async void JumpToAntigravityConversation(SessionItem session)
+        private void HandleFocusAlert(string focusId)
         {
-            if (session != null && !string.Equals(session.Source, "antigravity", StringComparison.OrdinalIgnoreCase))
+            SessionItem targetSession = null;
+            if (!string.IsNullOrEmpty(focusId))
             {
-                if (string.Equals(session.Source, "ClaudeCode", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(session.Source, "Codex", StringComparison.OrdinalIgnoreCase))
+                _sessions.TryGetValue(focusId, out targetSession);
+            }
+            if (targetSession == null)
+            {
+                UpdateTrayTooltip();
+                PushStateToUi(false, null);
+                return;
+            }
+
+            string src = targetSession.Source ?? "antigravity";
+            if (string.Equals(src, "ClaudeCode", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(src, "Codex", StringComparison.OrdinalIgnoreCase))
+            {
+                IntPtr termHwnd = FocusTerminalWindow();
+                if (termHwnd == IntPtr.Zero)
                 {
-                    FocusTerminalWindow();
+                    Log("FocusTerminal FAILED: no supported terminal window found");
+                    SendToastToUi("未检测到已打开的终端窗口，已保留通知");
+                    return;
                 }
+                ArchiveAndRemoveSession(focusId);
+                UpdateTrayTooltip();
+                PushStateToUi(false, null);
+                return;
+            }
+
+            if (!string.Equals(src, "antigravity", StringComparison.OrdinalIgnoreCase))
+            {
+                ArchiveAndRemoveSession(focusId);
+                UpdateTrayTooltip();
+                PushStateToUi(false, null);
                 return;
             }
 
             IntPtr targetHwnd = FocusAntigravityWindow();
+            if (targetHwnd == IntPtr.Zero)
+            {
+                Log("FocusAntigravity FAILED: window not found, keeping alert");
+                SendToastToUi("未检测到 Antigravity 窗口，已保留通知");
+                return;
+            }
+
+            ArchiveAndRemoveSession(focusId);
+            UpdateTrayTooltip();
+            PushStateToUi(false, null);
+            JumpToAntigravityConversation(targetHwnd, targetSession);
+        }
+
+        private async void JumpToAntigravityConversation(IntPtr targetHwnd, SessionItem session)
+        {
             if (targetHwnd == IntPtr.Zero || session == null) return;
 
-            string query = ResolveSearchQuery(session.LastUserInput, session.TranscriptPath, session.SearchQuery, session.Summary);
+            string query = ResolveSearchQuery(session.SessionName, session.LastUserInput, session.TranscriptPath, session.SearchQuery, session.Summary);
             if (string.IsNullOrWhiteSpace(query))
             {
                 Log("JumpConversation: empty search query, focused window only");
@@ -2335,9 +2473,39 @@ namespace AgentIsland
                 string fakeLine = "{\"step_index\":99,\"source\":\"MODEL\",\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"created_at\":\"" + pastUtc + "\",\"tool_calls\":[{\"name\":\"run_command\",\"args\":{\"BypassSandbox\":\"true\",\"toolSummary\":\"Deploy production build\",\"CommandLine\":\"pnpm deploy\"}}]}";
                 File.WriteAllText(fakeTranscript, firstUserLine + Environment.NewLine + fakeLine + Environment.NewLine, new UTF8Encoding(false));
 
-                string extractedQ = ResolveSearchQuery("ok", fakeTranscript, "", "fallback");
-                record("search_query_extraction", extractedQ == "Help debug Cloudflare Wo",
-                    "shortInputFallbackQuery=" + extractedQ);
+                string extractedQ = ResolveSearchQuery("", "ok", fakeTranscript, "", "fallback");
+                string titleQ = ResolveSearchQuery("灵动岛", "ok", fakeTranscript, "", "fallback");
+                record("search_query_extraction", extractedQ == "Help debug Cloudflare Wo" && titleQ == "灵动岛",
+                    "shortFallback=" + extractedQ + " | titleFirst=" + titleQ);
+
+                // 2.5 Test Auto-Dismiss when Antigravity annotation shows user viewed the conversation
+                string fakeAnn = Path.Combine(_selfTestDir, "viewed-conv.pbtxt");
+                long futureViewSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 20;
+                File.WriteAllText(fakeAnn, "title:\"灵动岛\" last_user_view_time:{seconds:" + futureViewSec + " nanos:0}", new UTF8Encoding(false));
+                _sessions.Clear();
+                _sessions["viewed-conv"] = new SessionItem
+                {
+                    ConversationId = "viewed-conv",
+                    Source = "antigravity",
+                    SessionName = "灵动岛",
+                    Project = "AgentIsland",
+                    Kind = "needs_reply",
+                    Title = "等你回复",
+                    Summary = "待你回复：确认这个方案吗？",
+                    AnnotationPath = fakeAnn,
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 5000
+                };
+                bool viewedCleared = CheckViewedSessions() && !_sessions.ContainsKey("viewed-conv");
+                record("viewed_session_auto_clear", viewedCleared, "cleared=" + viewedCleared);
+
+                // 2.6 Test drag offset clamping (no deadzone after dragging past screen edge)
+                int origOffset = _settings.OffsetX;
+                _settings.OffsetX = -99999;
+                ApplyWindowBounds(FixedCanvasLogicalW, FixedCanvasLogicalH, false);
+                bool offsetClamped = _settings.OffsetX > -5000 && _settings.OffsetX <= 0;
+                _settings.OffsetX = origOffset;
+                ApplyWindowBounds(FixedCanvasLogicalW, FixedCanvasLogicalH, false);
+                record("drag_offset_clamped", offsetClamped, "clampedOk=" + offsetClamped);
 
                 _sessions.Clear();
                 _sessions["radar-conv"] = new SessionItem
@@ -2474,6 +2642,112 @@ namespace AgentIsland
                 bool zeroJump = b1 == b2 && b2 == b3 && b3 == b4 && b4 == b5;
                 record("no_window_jump_on_morph", zeroJump,
                     string.Format("all5={0} ({1})", zeroJump, b1));
+
+                // 3.5 Automated UX State Machine Regression Suite (inside live WebView2)
+                // (a) Manual health open must survive 3s background heartbeat tick!
+                _sessions.Clear();
+                _healthAlertActive = false;
+                _seatedSeconds = 12 * 60;
+                PushStateToUi(false, null);
+                await Task.Delay(250);
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('health-orb').click()");
+                await Task.Delay(200);
+                PushStateToUi(false, null); // simulate 3s tick
+                await Task.Delay(220);
+                string manualHealthState = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify({view:window.__uxDebug().view, title:document.getElementById('main-island').innerText})"));
+                bool manualHealthOk = manualHealthState.Contains("\"view\":\"health\"") && manualHealthState.Contains("12m");
+                record("ux_manual_health_survives_tick", manualHealthOk, manualHealthState.Length > 120 ? manualHealthState.Substring(0, 120) : manualHealthState);
+
+                // (b) Active health countdown must NOT be killed by incoming AI alert!
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('btn-countdown').click()");
+                await Task.Delay(180);
+                _sessions["ux-alert-1"] = new SessionItem
+                {
+                    ConversationId = "ux-alert-1",
+                    Source = "ClaudeCode",
+                    SessionName = "backend-api",
+                    Project = "backend-api",
+                    Kind = "needs_approval",
+                    Title = "待批准权限",
+                    Summary = "请求批准 Bash：npm test",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                PushStateToUi(true, "agy");
+                await Task.Delay(220);
+                string cdProtect = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool cdProtectOk = cdProtect.Contains("\"view\":\"health\"") && cdProtect.Contains("\"countdownActive\":true");
+                record("ux_countdown_protected_from_ai", cdProtectOk, cdProtect);
+
+                // (c) Pause countdown must pause (retain remaining seconds), not reset!
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('btn-countdown').click()");
+                await Task.Delay(150);
+                string cdPause = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool cdPauseOk = cdPause.Contains("\"countdownActive\":false") && cdPause.Contains("\"countdownPaused\":true");
+                record("ux_countdown_true_pause", cdPauseOk, cdPause);
+
+                // (d) Overview clicking 2nd alert '处理' must open exact 2nd alert ID!
+                _sessions["ux-alert-2"] = new SessionItem
+                {
+                    ConversationId = "ux-alert-2",
+                    Source = "antigravity",
+                    SessionName = "灵动岛",
+                    Project = "AgentIsland",
+                    Kind = "needs_reply",
+                    Title = "等你回复",
+                    Summary = "待你回复：确认这 2 个交互偏好？",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 100
+                };
+                PushStateToUi(false, null);
+                await Task.Delay(120);
+                SendCommandToUi("open_overview");
+                await Task.Delay(220);
+                await _coreWebView.ExecuteScriptAsync("(function(){var btn=document.querySelector('[data-action=\"open-agy-pin\"][data-id=\"ux-alert-2\"]');if(btn)btn.click();})()");
+                await Task.Delay(220);
+                string exactTarget = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool exactTargetOk = exactTarget.Contains("\"view\":\"agy\"") && exactTarget.Contains("\"activeAlertId\":\"ux-alert-2\"");
+                record("ux_overview_exact_alert_id", exactTargetOk, exactTarget);
+
+                // (e) Soft needs_reply arms 6s auto-collapse; strong needs_approval stays pinned!
+                _sessions.Clear();
+                _sessions["ux-soft"] = new SessionItem
+                {
+                    ConversationId = "ux-soft",
+                    Source = "antigravity",
+                    SessionName = "灵动岛",
+                    Project = "AgentIsland",
+                    Kind = "needs_reply",
+                    Title = "等你回复",
+                    Summary = "已替换完成，线上代码与发版包现已一致",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                PushStateToUi(true, "agy");
+                await Task.Delay(200);
+                string softSnap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                _sessions["ux-strong"] = new SessionItem
+                {
+                    ConversationId = "ux-strong",
+                    Source = "Codex",
+                    SessionName = "infra-cli",
+                    Project = "infra-cli",
+                    Kind = "needs_approval",
+                    Title = "待批准命令",
+                    Summary = "请求批准 shell：terraform apply",
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                PushStateToUi(true, "agy");
+                await Task.Delay(200);
+                string strongSnap = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool autoCollapseRuleOk = softSnap.Contains("\"softAutoCollapseArmed\":true") && strongSnap.Contains("\"softAutoCollapseArmed\":false");
+                record("ux_soft_vs_strong_collapse_rule", autoCollapseRuleOk, "soft=" + softSnap + " | strong=" + strongSnap);
+
+                // (f) Outside click closes open context menu cleanly!
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
+                await Task.Delay(150);
+                string ctxBefore = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("String(window.__uxDebug().ctxOpen)"));
+                SendCommandToUi("outside_click");
+                await Task.Delay(180);
+                string ctxAfter = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("String(window.__uxDebug().ctxOpen)"));
+                record("ux_outside_click_closes_ctx", ctxBefore == "true" && ctxAfter == "false", "before=" + ctxBefore + " after=" + ctxAfter);
 
                 // 4. Frontend JS error check
                 string jsErrJson = await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__diagErrors || [])");
