@@ -679,6 +679,7 @@
 
     let lastRenderKey = "";
     let lastViewMode = "";
+    let lastExpandAt = 0;
     let hoverOpenTimer = null;
     let hoverCloseTimer = null;
     let autoCollapseTimer = null;
@@ -892,10 +893,31 @@
         }
         return null;
       };
-      const mainBox = addRect(mainIsland, 1);
-      if (state.view === "compact" && !healthOrb.classList.contains("hidden-orb")) {
-        addRect(healthOrb, 1);
+
+      let mainBox = null;
+      if (state.view !== "compact") {
+        // Use the full TARGET expanded bounds immediately during CSS morph so a cursor resting on
+        // the right Health Ring NEVER falls outside _hitRects mid-transition and triggers a false Leave!
+        const target = computeMainSize(state.view);
+        const r = mainIsland.getBoundingClientRect();
+        const effW = Math.max(r.width, target.w);
+        const effH = Math.max(r.height, target.h);
+        const cx = (window.innerWidth || 520) / 2;
+        const topY = r.height > 4 ? r.top : 16;
+        mainBox = {
+          x: Math.round(cx - effW / 2 - 2),
+          y: Math.round(topY - 2),
+          w: Math.round(effW + 4),
+          h: Math.round(effH + 4)
+        };
+        rects.push(mainBox);
+      } else {
+        mainBox = addRect(mainIsland, 1);
+        if (!healthOrb.classList.contains("hidden-orb")) {
+          addRect(healthOrb, 1);
+        }
       }
+
       if (state.ctxOpen) {
         const ctxBox = addRect(ctxMenu, 2);
         // Bridge the 8px vertical gap between pill/card and open context menu so moving downward never flickers
@@ -917,8 +939,9 @@
 
     function scheduleHitRectSync() {
       requestAnimationFrame(() => reportHitRectsNow());
+      setTimeout(reportHitRectsNow, 150);
       if (hitRectTimer) clearTimeout(hitRectTimer);
-      hitRectTimer = setTimeout(reportHitRectsNow, 370);
+      hitRectTimer = setTimeout(reportHitRectsNow, 380);
     }
 
     function clearAutoCollapseTimer() {
@@ -1216,6 +1239,9 @@
       mainIsland.style.borderRadius = target.r + "px";
 
       const viewChanged = (state.view !== lastViewMode);
+      if (viewChanged && lastViewMode === "compact" && state.view !== "compact") {
+        lastExpandAt = Date.now();
+      }
       if (viewChanged && lastViewMode === "health") {
         resetCountdown();
         state.manualHealthOpen = false;
@@ -1566,7 +1592,12 @@
       }
     });
 
-    dock.addEventListener("mouseleave", () => {
+    dock.addEventListener("mouseleave", (e) => {
+      // Ignore transient DOM mouseleave fired mid-transition when healthOrb collapses to width:0 before mainIsland finishes expanding over cursor
+      const isHostTrueLeave = (e.clientX === 0 && e.clientY === 0);
+      if (!isHostTrueLeave && (Date.now() - lastExpandAt) < 460) {
+        return;
+      }
       pointerInsideDock = false;
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
       if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused) {

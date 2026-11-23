@@ -2846,6 +2846,31 @@ namespace AgentIsland
                 bool i18nOk = enText.Contains("Agent Plane") && enText.Contains("Clear All") && zhText.Contains("Agent Plane") && zhText.Contains("全部已读");
                 record("ux_i18n_auto_and_toggle", i18nOk, "en=" + enText.Replace("\n", " ") + " | zh=" + zhText.Replace("\n", " "));
 
+                // (h) Hovering right Health Ring: hit_rects MUST immediately cover the orb's cursor spot mid-morph AND ignore transient DOM mouseleave (no bounce!)
+                SendCommandToUi("outside_click");
+                await Task.Delay(440);
+                RectangleF orbRectBefore = _hitRects.Count >= 2 ? _hitRects[1] : RectangleF.Empty;
+                float orbCenterX = orbRectBefore.Left + orbRectBefore.Width / 2f;
+                float orbCenterY = orbRectBefore.Top + orbRectBefore.Height / 2f;
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('health-orb').dispatchEvent(new MouseEvent('mouseenter',{bubbles:false}))");
+                await Task.Delay(370); // just after 320ms hover open (mid CSS transition!)
+                bool orbStillCovered = false;
+                foreach (var hr in _hitRects)
+                {
+                    if (orbCenterX >= hr.Left && orbCenterX <= hr.Right && orbCenterY >= hr.Top && orbCenterY <= hr.Bottom)
+                    {
+                        orbStillCovered = true;
+                        break;
+                    }
+                }
+                // Simulate Chromium's transient DOM mouseleave at the orb's coordinates mid-morph
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('dock').dispatchEvent(new MouseEvent('mouseleave',{clientX:300,clientY:34,bubbles:false}))");
+                await Task.Delay(480); // longer than 380ms close timer
+                string orbHoverState = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
+                bool orbHoverOk = !orbRectBefore.IsEmpty && orbStillCovered && orbHoverState.Contains("\"view\":\"health\"");
+                record("ux_hover_health_orb_no_bounce", orbHoverOk,
+                    string.Format("orbCenter=({0:F0},{1:F0}) coveredMidMorph={2} survivedBounce={3}", orbCenterX, orbCenterY, orbStillCovered, orbHoverState.Contains("\"view\":\"health\"")));
+
                 // 4. Frontend JS error check
                 string jsErrJson = await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__diagErrors || [])");
                 string jsErrUnquoted = UnquoteJsString(jsErrJson);
