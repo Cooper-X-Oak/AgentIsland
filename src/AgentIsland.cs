@@ -2822,11 +2822,14 @@ namespace AgentIsland
                     && l3Snap.Contains("\"view\":\"agy\"") && l3Snap.Contains("\"autoCollapseMs\":30000");
                 record("ux_notification_tiering_l1_l2_l3", tierRuleOk, "L1=" + l1Snap + " | L2=" + l2Snap + " | L3=" + l3Snap);
 
-                // (f) Outside click closes BOTH open context menu AND expanded card cleanly!
+                // (f) Outside click closes BOTH open context menu AND expanded card cleanly; AND expanded ctx menu MUST NOT clip outside canvas!
                 SendCommandToUi("open_overview");
                 await Task.Delay(150);
                 await _coreWebView.ExecuteScriptAsync("document.getElementById('main-island').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
                 await Task.Delay(150);
+                string ctxGeom = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify((()=>{const r=document.getElementById('ctx-menu').getBoundingClientRect();return {top:Math.round(r.top),bottom:Math.round(r.bottom),winH:window.innerHeight,fits:r.height>40 && r.bottom <= window.innerHeight - 16};})())"));
+                record("ux_ctx_menu_never_clipped_when_expanded", ctxGeom.Contains("\"fits\":true"), ctxGeom);
+
                 string beforeOutside = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
                 SendCommandToUi("outside_click");
                 await Task.Delay(180);

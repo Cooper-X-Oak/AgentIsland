@@ -562,14 +562,18 @@
       font-weight: 700;
     }
 
-    /* Inline Right-Click Context Menu */
+    /* Inline Right-Click Context Menu (positioned inside fixed 290px canvas so it NEVER clips even when card is expanded) */
     .ctx-menu {
-      margin-top: 8px;
+      position: fixed;
+      top: 58px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
       width: 248px;
       border-radius: 14px;
-      background: rgba(16, 18, 24, 0.98);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.42);
+      background: rgba(16, 18, 24, 0.985);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(0, 0, 0, 0.35);
       padding: 6px;
       display: none;
       flex-direction: column;
@@ -870,7 +874,7 @@
     function computeMainSize(view) {
       if (view === "agy") return { w: 438, h: state.toastText ? 148 : 132, r: 22 };
       if (view === "health") return { w: 438, h: 162, r: 22 };
-      if (view === "overview") return { w: 438, h: 186, r: 22 };
+      if (view === "overview") return { w: 438, h: 174, r: 22 };
       if (state.alerts.length > 0) return { w: 196, h: 36, r: 18 };
       if (state.working.length > 0) return { w: 168, h: 36, r: 18 };
       return { w: state.muted ? 94 : 78, h: 36, r: 18 };
@@ -1443,13 +1447,7 @@
             </div>
           </div>`;
       } else if (state.view === "overview") {
-        // Pure Agent Plane — 100% focused on AI agents, sessions, alerts, history, sound & language (zero posture clutter!)
-        const langChips = [
-          { k: "auto", t: isEn() ? "Auto" : "自动" },
-          { k: "zh", t: "中" },
-          { k: "en", t: "EN" }
-        ].map(x => `<button class="int-chip ${state.language === x.k ? 'active' : ''}" data-action="set-language" data-val="${x.k}">${x.t}</button>`).join("");
-
+        // Pure Agent Plane — focused strictly on AI sessions, alerts & history (language lives only in right-click menu)
         let listHtml = "";
         let rowCount = 0;
         if (state.alerts.length > 0) {
@@ -1487,16 +1485,20 @@
           }
         }
         if (!listHtml) {
-          listHtml = `<div class="ov-item"><span class="meta-text">${isEn() ? "All agents idle — waiting for hooks from Antigravity, Claude, Codex" : "全部 Agent 待命 · 监听 Antigravity / Claude / Codex"}</span></div>`;
+          listHtml = `<div class="ov-item"><span class="meta-text">${isEn() ? "All agents idle — listening to Antigravity, Claude & Codex" : "全部 Agent 待命 · 监听 Antigravity / Claude / Codex"}</span></div>`;
         }
 
         const planeStats = isEn()
           ? `${state.working.length} active · ${state.alerts.length} pending`
           : `${state.working.length} 运行中 · ${state.alerts.length} 待处理`;
 
-        renderKey = `ov-${state.resolvedLang}-${state.language}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}`;
+        const muteIconSvg = state.muted
+          ? `<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><line x1="9.6" y1="5" x2="12.6" y2="9"/><line x1="12.6" y1="5" x2="9.6" y2="9"/></svg>`
+          : `<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><path d="M9.4 5a2.6 2.6 0 0 1 0 4"/><path d="M11 3.4a4.8 4.8 0 0 1 0 7.2"/></svg>`;
+
+        renderKey = `ov-${state.resolvedLang}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}`;
         html = `
-          <div class="card${enterCls}">
+          <div class="card${enterCls}" style="justify-content:flex-start;gap:10px;">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="brand-icon">${getBrandGlyph("antigravity", "#60a5fa")}</span>
@@ -1505,16 +1507,11 @@
               </div>
               <div class="card-top-right">
                 ${state.alerts.length > 0 ? `<button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全部已读"}</button>` : ""}
+                <button class="icon-btn" data-action="toggle-mute" title="${state.muted ? (isEn() ? 'Unmute' : '开启提示音') : (isEn() ? 'Mute' : '静音')}">${muteIconSvg}</button>
                 <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
             <div class="ov-list">${listHtml}</div>
-            <div class="actions">
-              <div class="btn-group">
-                <button class="btn btn-secondary" data-action="toggle-mute">${state.muted ? (isEn() ? '🔊 Unmute' : '🔊 开启提示音') : (isEn() ? '🔕 Mute' : '🔕 静音')}</button>
-              </div>
-              <div class="int-chips">${langChips}</div>
-            </div>
           </div>`;
       }
 
