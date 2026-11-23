@@ -2,13 +2,14 @@
 
 # AgentIsland
 
-**A 68 KB Native Windows 11 Dynamic Island for AI Coding Agents & Posture Coach**
+**A 80 KB Native Windows 11 Dynamic Island for AI Coding Agents & Posture Coach**
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
 [![Platform](https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland)
-[![Size](https://img.shields.io/badge/Host%20Binary-68%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
-[![Zero Electron](https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square)](#why-directcomposition--webview2)
+[![Size](https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
+[![Zero Electron](https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square)](#highlights)
+[![Verified](https://img.shields.io/badge/Self--Tests-41%2F41%20Pass-10b981?style=flat-square)](#architecture--verification)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 <br />
@@ -35,17 +36,26 @@ If you run multiple AI coding agents (**Antigravity, Claude Code, Codex CLI, Cur
 ## Highlights
 
 * **Zero Electron, Zero Jagged Edges, Zero Ghost Box**: Built in pure C# with `WS_EX_NOREDIRECTIONBITMAP` + **DirectComposition (`dcomp.dll`)** + system built-in **WebView2 CompositionController**.
-  * 68 KB native host binary (~268 KB total portable zip).
+  * 80 KB native host binary (~288 KB total portable zip).
   * Sub-pixel anti-aliased rounded corners & soft CSS shadows (`edgeMaxA = 0` on all 4 edges).
   * True cross-process mouse click-through (`WS_EX_LAYERED | WS_EX_TRANSPARENT` dynamically toggled every 30ms — never blocks browser tabs behind the transparent canvas or the 8px gap between split pills).
   * Fixed invisible canvas — **0 px window jump / flicker** during spring morph animations.
   * Automatically yields Z-order to Snipping Tool / screen capture overlays.
-* **Low-Friction Interaction**:
-  * **Hover (260ms)** to peek overview, move away (380ms) to auto-collapse; click or alert locks open.
-  * **Right-click** the pill or ring for instant actions (Done, 30/45/50/60m interval, Mute, Pause 1h).
-  * **Global Hotkeys**: `Alt + \` toggles the island; `Alt + Shift + \` jumps directly to the latest waiting Antigravity session.
+* **Attention-First UX & Ultra-Compact Brand Glyphs**:
+  * **Minimal Brand SVG Glyphs** (`112–196 px` compact pill): Crisp vector symbols for Antigravity, Claude Code, Codex, and CLI + 3-bar live wave instead of bloated status text.
+  * **Decision-Grade Summaries**: Shows the **real conversation title** (from Antigravity `annotations/*.pbtxt`) and distills what the AI actually asked or concluded — never echoes your own prompt back at you.
+  * **4-Tier Notification Escalation & Auto-Collapse**: Filters false mid-turn stops (`fullyIdle: false`), keeps L1 replies quietly rotating in the capsule ticker (`1/N` every 3.5s), auto-collapses L2 toasts in 8s and L3 approvals in 30s, and auto-clears alerts once you switch into that session.
+  * **Zero-Accident Hover & Shortcuts**: Hover (260ms) previews the currently ticked alert without popping an overview over browser tabs when idle; right-click anywhere on the pill/ring for inline quick actions (closes on outside desktop click); `Alt + \` toggles, `Alt + Shift + \` jumps directly to the latest waiting session.
 * **Open, Zero-Port Event Bus**: Drop atomic JSON into `%LOCALAPPDATA%\AgentIsland\inbox\` or call `bin\island-push.exe` from any AI terminal, build script, or CI hook.
-* **Built-in 22-Point Self-Verification Suite**: Run `.\verify.ps1 -Rebuild` to verify Hook contracts, DirectComposition HRESULTs, real `WindowFromPoint` click-through, per-pixel edge alpha, and generate a 4× anti-aliasing microscope sheet automatically.
+* **Built-in 41-Point Self-Verification Suite**: Run `.\verify.ps1 -Rebuild` to verify Hook contracts, decision summaries, false-stop filtering, UX state-machine regressions, DirectComposition HRESULTs, real `WindowFromPoint` click-through, per-pixel edge alpha, and generate a 4× anti-aliasing microscope sheet automatically.
+
+---
+
+## Attention Economy & Notification Flow
+
+Not every AI event deserves to interrupt your flow. AgentIsland filters background mid-turn pauses and routes events across **4 attention tiers (`L0`–`L3`)** so your top bar stays calm:
+
+<img src="docs/attention-tiers-en.svg" alt="AgentIsland 4-Tier Notification Attention Economy & Auto-Collapse Pipeline" width="100%" />
 
 ---
 
@@ -102,7 +112,7 @@ Test both alerts immediately:
 AI Terminals (Antigravity / Claude Code / Codex / CLI)
    └── island-hook.exe / island-push.exe  ──► %LOCALAPPDATA%\AgentIsland\inbox\*.json
                                                       │ (FileSystemWatcher)
-Win32 GetLastInputInfo + Lock Detection ──────────────┼──► AgentIsland.exe (68 KB C# Host)
+Win32 GetLastInputInfo + Lock Detection ──────────────┼──► AgentIsland.exe (80 KB C# Host)
                                                       │     ├── Approval Radar (transcript tail)
                                                       │     ├── WS_EX_NOREDIRECTIONBITMAP + dcomp.dll
                                                       │     ├── Dynamic WS_EX_TRANSPARENT Click-Through

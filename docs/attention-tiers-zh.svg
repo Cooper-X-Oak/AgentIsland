@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" width="920" height="330" role="img" aria-label="AgentIsland 四级注意力分级与自动退场流程图">
+  <defs>
+    <marker id="arr-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#8b949e" />
+    </marker>
+    <marker id="arr-p" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#60a5fa" />
+    </marker>
+    <marker id="arr-w" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#f59e0b" />
+    </marker>
+    <marker id="arr-e" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#ef4444" />
+    </marker>
+    <marker id="arr-s" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,1 L7,4 L0,7 Z" fill="#4ade80" />
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif; }
+  </style>
+
+  <!-- Outer Dark Card Frame -->
+  <rect x="0" y="0" width="920" height="330" rx="16" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+
+  <!-- Header -->
+  <text x="20" y="27" font-size="13" font-weight="700" fill="#f0f6fc">AgentIsland — 四级注意力分级、胶囊轮播与自动退场流程</text>
+  <rect x="768" y="13" width="132" height="20" rx="10" fill="rgba(34,197,94,0.14)" stroke="rgba(74,222,128,0.45)" stroke-width="1" />
+  <text x="834" y="26.5" font-size="10" font-weight="700" fill="#4ade80" text-anchor="middle">41/41 自动化全绿</text>
+
+  <!-- 3 Swimlanes -->
+  <rect x="14" y="42" width="222" height="272" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="26" y="61" font-size="10" font-weight="700" fill="#8b949e">01 · 伪中断过滤与决策提炼</text>
+
+  <rect x="250" y="42" width="400" height="272" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="262" y="61" font-size="10" font-weight="700" fill="#8b949e">02 · 四级注意力分级 (L0 → L3)</text>
+
+  <rect x="664" y="42" width="242" height="272" rx="12" fill="#161b22" stroke="#262c36" stroke-width="1" />
+  <text x="676" y="61" font-size="10" font-weight="700" fill="#8b949e">03 · 胶囊轮播与退场闭环</text>
+
+  <!-- Bezier Connectors -->
+  <path d="M224,114 C244,114 244,98 262,98" fill="none" stroke="#8b949e" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arr-m)" />
+  <path d="M224,218 C244,218 244,158 262,158" fill="none" stroke="#60a5fa" stroke-width="1.4" marker-end="url(#arr-p)" />
+  <path d="M224,226 C244,226 244,218 262,218" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arr-w)" />
+  <path d="M224,234 C244,234 244,278 262,278" fill="none" stroke="#ef4444" stroke-width="1.4" marker-end="url(#arr-e)" />
+
+  <path d="M638,98 C656,98 656,112 676,112" fill="none" stroke="#8b949e" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arr-m)" />
+  <path d="M638,158 C656,158 656,124 676,124" fill="none" stroke="#60a5fa" stroke-width="1.4" marker-end="url(#arr-p)" />
+  <path d="M638,218 C656,218 656,216 676,216" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arr-w)" />
+  <path d="M638,278 C656,278 656,268 676,268" fill="none" stroke="#ef4444" stroke-width="1.4" marker-end="url(#arr-e)" />
+
+  <!-- Column 1 -->
+  <rect x="24" y="72" width="200" height="90" rx="10" fill="#0d1117" stroke="rgba(74,222,128,0.55)" stroke-width="1.3" />
+  <text x="34" y="91" font-size="11.5" font-weight="700" fill="#f0f6fc">拦截「中途停一下又继续」</text>
+  <text x="34" y="108" font-size="10" fill="#8b949e">• fullyIdle=false (后台任务跑)</text>
+  <text x="34" y="123" font-size="10" fill="#8b949e">• continuationActive=true</text>
+  <text x="34" y="138" font-size="10" fill="#8b949e">• 消除 write_file 耗时误报</text>
+  <text x="34" y="153" font-size="9.5" font-weight="600" fill="#4ade80">✓ 全部降回 L0，绝不打断心流</text>
+
+  <rect x="24" y="174" width="200" height="128" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.55)" stroke-width="1.3" />
+  <text x="34" y="193" font-size="11.5" font-weight="700" fill="#f0f6fc">一眼决策：哪个会话 · 找我干啥</text>
+  <text x="34" y="211" font-size="10" fill="#8b949e">• 读取 pbtxt 真实会话标题</text>
+  <text x="34" y="226" font-size="10" fill="#8b949e">• 倒读 AI 回复提炼提问/结论</text>
+  <text x="34" y="241" font-size="10" fill="#8b949e">• 彻底告别复读用户自己输入</text>
+  <text x="34" y="259" font-size="9.5" fill="#60a5fa">• 品牌矢量微标：AGY / Claude</text>
+  <text x="34" y="274" font-size="9.5" fill="#60a5fa">  / Codex / CLI（112–196px 瘦身）</text>
+  <text x="34" y="291" font-size="9.5" font-weight="600" fill="#4ade80">✓ 仅按阻塞程度决定是否弹窗</text>
+
+  <!-- Column 2: L0..L3 -->
+  <rect x="262" y="72" width="376" height="50" rx="10" fill="#0d1117" stroke="#30363d" stroke-width="1.2" />
+  <text x="274" y="91" font-size="11.5" font-weight="700" fill="#f0f6fc">L0 · 静默运转（思考中 / 后台任务等待）</text>
+  <text x="274" y="109" font-size="10" fill="#8b949e">不弹窗 · 不发声 · 168px 胶囊显示品牌符号 + 会话名 + 三条动态波形</text>
+
+  <rect x="262" y="132" width="376" height="50" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.65)" stroke-width="1.4" />
+  <text x="274" y="151" font-size="11.5" font-weight="700" fill="#f0f6fc">L1 · 胶囊轮播（普通回复完成 / 常规推送）</text>
+  <text x="274" y="169" font-size="10" fill="#60a5fa">绝不强弹大卡！收缩胶囊亮蓝边 + 每 3.5s 自动轮播 1/N，Hover 才展开</text>
+
+  <rect x="262" y="192" width="376" height="50" rx="10" fill="#0d1117" stroke="rgba(245,158,11,0.7)" stroke-width="1.4" />
+  <text x="274" y="211" font-size="11.5" font-weight="700" fill="#f0f6fc">L2 · 短暂浮窗（等你拍板选择卡 / 执行报错）</text>
+  <text x="274" y="229" font-size="10" fill="#fbbf24">弹大卡 8 秒扫一眼 → 无人理会自动缩回胶囊，保持橙/红呼吸轮播</text>
+
+  <rect x="262" y="252" width="376" height="50" rx="10" fill="#0d1117" stroke="rgba(239,68,68,0.75)" stroke-width="1.5" />
+  <text x="274" y="271" font-size="11.5" font-weight="700" fill="#f0f6fc">L3 · 阻塞强提醒（权限卡死审批 / 久坐满额护腰）</text>
+  <text x="274" y="289" font-size="10" fill="#f87171">弹大卡提醒 · 放满 30 秒无人动亦自动缩回醒目脉冲胶囊，绝不死占屏</text>
+
+  <!-- Column 3 -->
+  <rect x="676" y="72" width="218" height="104" rx="10" fill="#0d1117" stroke="rgba(96,165,250,0.55)" stroke-width="1.3" />
+  <text x="688" y="91" font-size="11.5" font-weight="700" fill="#f0f6fc">收缩态 3.5s 自动轮播</text>
+  <text x="688" y="109" font-size="10" fill="#8b949e">• 多条消息自动切换 + 1/N 计数</text>
+  <text x="688" y="124" font-size="10" fill="#8b949e">• 鼠标移上即展开当前滚播条目</text>
+  <text x="688" y="139" font-size="10" fill="#8b949e">• 空闲路过绝不误弹 230px 总览</text>
+  <text x="688" y="154" font-size="10" fill="#8b949e">• 点击外部桌面自动收起右键菜单</text>
+  <text x="688" y="168" font-size="9.5" font-weight="600" fill="#4ade80">✓ 胶囊周围与缝隙 100% 物理穿透</text>
+
+  <rect x="676" y="188" width="218" height="114" rx="10" fill="#0d1117" stroke="rgba(74,222,128,0.55)" stroke-width="1.3" />
+  <text x="688" y="207" font-size="11.5" font-weight="700" fill="#f0f6fc">全链路自动退场 &amp; 已读消隐</text>
+  <text x="688" y="225" font-size="10" fill="#8b949e">• L2 浮窗：8s 无交互 → 回胶囊</text>
+  <text x="688" y="240" font-size="10" fill="#8b949e">• L3 阻塞：30s 无交互 → 回胶囊</text>
+  <text x="688" y="255" font-size="10" fill="#8b949e">• 手点展开：60s 闲置 → 回胶囊</text>
+  <text x="688" y="270" font-size="10" fill="#4ade80">• 切入原会话 → 自动已读消隐</text>
+  <text x="688" y="288" font-size="9.5" fill="#8b949e">（仅护腰跟练倒计时中锁定不收）</text>
+</svg>

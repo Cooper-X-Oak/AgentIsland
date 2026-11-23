@@ -2,13 +2,14 @@
 
 # AgentIsland
 
-**面向 AI 编程时代的 Windows 11 原生灵动岛（68 KB 零 Electron · 多终端雷达 · 护腰跟练）**
+**面向 AI 编程时代的 Windows 11 原生灵动岛（80 KB 零 Electron · 注意力分级雷达 · 护腰跟练）**
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
 [![Platform](https://img.shields.io/badge/Windows-11%20x64-0078D6?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland)
-[![Size](https://img.shields.io/badge/Host%20Binary-68%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
+[![Size](https://img.shields.io/badge/Host%20Binary-80%20KB-22c55e?style=flat-square)](https://github.com/Cooper-X-Oak/AgentIsland/releases)
 [![Zero Electron](https://img.shields.io/badge/Electron-Zero-f59e0b?style=flat-square)](#核心工程亮点)
+[![Verified](https://img.shields.io/badge/自动化自检-41%2F41%20全绿-10b981?style=flat-square)](#注意力分级与交互流程)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 <br />
@@ -35,17 +36,26 @@
 ## 核心工程亮点
 
 * **零 Electron、零锯齿、零系统外阴影、零透明墙**：
-  * 纯 C# 原生宿主仅 **68 KB**（完整免编译便携 zip 仅 **268 KB**），基于 **`WS_EX_NOREDIRECTIONBITMAP` + DirectComposition (`dcomp.dll`) + 系统内置 WebView2 CompositionController**；
+  * 纯 C# 原生宿主仅 **80 KB**（完整免编译便携 zip 仅 **288 KB**），基于 **`WS_EX_NOREDIRECTIONBITMAP` + DirectComposition (`dcomp.dll`) + 系统内置 WebView2 CompositionController**；
   * 真正亚像素抗锯齿圆角与柔和投影（整圈外框实测 `Alpha = 0`）；
   * **真跨进程鼠标穿透**：通过 `WS_EX_LAYERED | WS_EX_TRANSPARENT` + 30ms 命中切换，胶囊周围空白区与双岛 8px 缝隙 100% 物理穿透，绝不挡下层浏览器标签；
   * **固定隐形画布**：展开/收起全程 Win32 窗口 0 像素位移，彻底杜绝闪烁与横跳；
   * 自动避让 Snipping Tool / 截图录屏工具顶栏。
-* **极低摩擦交互**：
-  * **Hover 260ms** 轻展开总览、移出 380ms 自动缩回；点击或强提醒锁定展开；
-  * **右键药丸/圆环**直接弹内联快捷菜单（刚站过 / 切 30·45·50·60m / 静音 / 暂停 1h）；
-  * **全局热键**：`Alt + \` 随时展收，`Alt + Shift + \` 一键直达最新待介入的 Antigravity 会话。
+* **注意力分级与极简品牌微胶囊**：
+  * **去臃肿化品牌矢量符号**（`112–196 px` 极简胶囊）：用 Antigravity / Claude / Codex / CLI 专属 14×14 矢量符号 + 动态 3 条波形替代冗长的文字状态前缀；
+  * **一眼决策内容**：读取真实会话标题（`annotations/*.pbtxt`），直接提炼 AI 实际提问或结论，彻底告别复读用户自己输入；
+  * **四级分级 + 自动退场**：过滤后台任务导致的伪停止（`fullyIdle: false`），普通回复（L1）绝不弹大卡、只在收缩胶囊内每 3.5 秒轮播 `1/N`；拍板/报错（L2）8 秒自动缩回，权限审批（L3）30 秒未处理也自动缩回醒目脉冲胶囊；切入原会话自动已读消隐；
+  * **低摩擦零误触交互**：仅在有待介入消息时 Hover 260ms 展开当前轮播条目（空闲路过绝不误弹总览挡标签）；右键菜单点击外部桌面即关；`Alt + \` 随时展收，`Alt + Shift + \` 一键直达最新待介入会话。
 * **开放零端口通知总线**：任何终端、脚本、CI 只要调用 `bin\island-push.exe` 或向 `%LOCALAPPDATA%\AgentIsland\inbox\` 写入 JSON 即可秒级上岛。
-* **自带 22 项全视自检套件**：一行 `.\verify.ps1 -Rebuild` 自动验 Hook 契约、DirectComposition、真实垫底窗 `WindowFromPoint` 穿透、5 态外缘 `Alpha = 0`、0 闪身并生成 4× 抗锯齿显微镜拼图。
+* **自带 41 项全视自检套件**：一行 `.\verify.ps1 -Rebuild` 自动验 Hook 契约、决策摘要、伪停止过滤、UX 状态机回归、DirectComposition、真实垫底窗 `WindowFromPoint` 穿透、5 态外缘 `Alpha = 0`、0 闪身并生成 4× 抗锯齿显微镜拼图。
+
+---
+
+## 注意力分级与交互流程
+
+不是每一条 AI 动态都配得上强占屏幕打断你的心流。AgentIsland 先拦截「中途停一下又继续」的伪通知，再按阻塞程度分流到 **L0–L3 四个级别**，让顶部始终克制清爽：
+
+<img src="docs/attention-tiers-zh.svg" alt="AgentIsland 四级注意力分级、胶囊轮播与自动退场流程图" width="100%" />
 
 ---
 
