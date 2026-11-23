@@ -2130,8 +2130,20 @@ namespace AgentIsland
                 return cleanedFirst;
             }
 
-            if (cleaned.Length > 0) return cleaned;
-            return CleanSearchPhrase(fallbackSummary);
+            if (cleaned.Length > 0 && !IsGenericFallbackPhrase(cleaned)) return cleaned;
+            string cleanedFallback = CleanSearchPhrase(fallbackSummary);
+            if (!IsGenericFallbackPhrase(cleanedFallback)) return cleanedFallback;
+            return "";
+        }
+
+        private static bool IsGenericFallbackPhrase(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return true;
+            return s.StartsWith("正在执行任务", StringComparison.Ordinal)
+                || s.StartsWith("后台任务执行中", StringComparison.Ordinal)
+                || s.StartsWith("本轮回复已完成", StringComparison.Ordinal)
+                || s.StartsWith("弹出选择卡", StringComparison.Ordinal)
+                || s.StartsWith("执行遇到异常", StringComparison.Ordinal);
         }
 
         private static string CleanSearchPhrase(string raw)
@@ -2225,7 +2237,12 @@ namespace AgentIsland
 
             try
             {
-                ShowWindow(target, IsIconic(target) ? SW_RESTORE : SW_SHOW);
+                // Only call ShowWindow when actually minimized to taskbar; calling ShowWindow on a maximized/snapped
+                // Electron window causes a visible resize/shrink bounce.
+                if (IsIconic(target))
+                {
+                    ShowWindow(target, SW_RESTORE);
+                }
 
                 IntPtr fg = GetForegroundWindow();
                 uint fgPid;
@@ -2313,7 +2330,10 @@ namespace AgentIsland
 
             try
             {
-                ShowWindow(target, IsIconic(target) ? SW_RESTORE : SW_SHOW);
+                if (IsIconic(target))
+                {
+                    ShowWindow(target, SW_RESTORE);
+                }
                 IntPtr fg = GetForegroundWindow();
                 uint fgPid;
                 uint fgThread = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out fgPid) : 0;
@@ -2632,8 +2652,9 @@ namespace AgentIsland
 
                 string extractedQ = ResolveSearchQuery("", "ok", fakeTranscript, "", "fallback");
                 string titleQ = ResolveSearchQuery("灵动岛", "ok", fakeTranscript, "", "fallback");
-                record("search_query_extraction", extractedQ == "Help debug Cloudflare Wo" && titleQ == "灵动岛",
-                    "shortFallback=" + extractedQ + " | titleFirst=" + titleQ);
+                string genericBlocked = ResolveSearchQuery("", "", "", "", "正在执行任务");
+                record("search_query_extraction", extractedQ == "Help debug Cloudflare Wo" && titleQ == "灵动岛" && genericBlocked == "",
+                    "shortFallback=" + extractedQ + " | titleFirst=" + titleQ + " | genericBlocked=" + (genericBlocked == ""));
 
                 // 2.5 Test Auto-Dismiss when Antigravity annotation shows user viewed the conversation
                 string fakeAnn = Path.Combine(_selfTestDir, "viewed-conv.pbtxt");
