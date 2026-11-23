@@ -1,0 +1,44 @@
+[
+  {
+    "id": "squats",
+    "category": "glutes",
+    "title": "原地深蹲 15 个",
+    "seconds": 45,
+    "tip": "膝盖对准脚尖、臀部往后坐，唤醒久坐睡死的臀肌"
+  },
+  {
+    "id": "mckenzie",
+    "category": "lumbar",
+    "title": "麦肯基俯卧轻撑",
+    "seconds": 30,
+    "tip": "手肘撑稳微微抬头，骨盆贴地放松，给腰椎反向减压"
+  },
+  {
+    "id": "water-gaze",
+    "category": "eyes",
+    "title": "站起来接水 + 远眺",
+    "seconds": 120,
+    "tip": "离开椅子走两步，顺便让眼睛睫状肌松一口气"
+  },
+  {
+    "id": "wall-sit",
+    "category": "core",
+    "title": "靠墙静蹲",
+    "seconds": 45,
+    "tip": "后背贴实墙面、小腿垂直地面，稳住核心不塌腰"
+  },
+  {
+    "id": "chest-opener",
+    "category": "shoulder",
+    "title": "站立扩胸 + 绕肩",
+    "seconds": 60,
+    "tip": "双手背后相扣轻轻拉开胸腔，对抗低头圆肩"
+  },
+  {
+    "id": "calf-raises",
+    "category": "circulation",
+    "title": "踮脚提踵 25 次",
+    "seconds": 40,
+    "tip": "站直慢起慢落，促进下肢血液回流"
+  }
+]
