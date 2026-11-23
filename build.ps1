@@ -80,47 +80,45 @@ Start-Sleep -Milliseconds 250
 
 # 3. Compile Antigravity hook forwarder (island-hook.exe)
 $IconPath = Join-Path $Root "assets\app.ico"
-$IconFlag = if (Test-Path $IconPath) { @("/win32icon:$IconPath") } else { @() }
+$HasIcon = Test-Path $IconPath
 
 $HookOut = Join-Path $BinDir "island-hook.exe"
 $HookSrc = Join-Path $SrcDir "IslandHook.cs"
 Write-Host "[1/3] Compiling island-hook.exe ..."
-& $Csc /nologo /optimize+ /platform:x64 /target:exe /utf8output `
-    @IconFlag `
-    "/r:System.dll" `
-    "/r:System.Core.dll" `
-    "/r:System.Web.Extensions.dll" `
-    "/out:$HookOut" `
-    "$HookSrc"
+$hookArgs = @(
+    "/nologo", "/optimize+", "/platform:x64", "/target:exe", "/utf8output",
+    "/r:System.dll", "/r:System.Core.dll", "/r:System.Web.Extensions.dll",
+    "/out:$HookOut", "$HookSrc"
+)
+if ($HasIcon) { $hookArgs += "/win32icon:$IconPath" }
+& $Csc @hookArgs
 if ($LASTEXITCODE -ne 0) { throw "island-hook.exe build failed" }
 
 # 4. Compile universal CLI pusher (island-push.exe)
 $PushOut = Join-Path $BinDir "island-push.exe"
 $PushSrc = Join-Path $SrcDir "IslandPush.cs"
 Write-Host "[2/3] Compiling island-push.exe ..."
-& $Csc /nologo /optimize+ /platform:x64 /target:exe /utf8output `
-    @IconFlag `
-    "/r:System.dll" `
-    "/r:System.Core.dll" `
-    "/r:System.Web.Extensions.dll" `
-    "/out:$PushOut" `
-    "$PushSrc"
+$pushArgs = @(
+    "/nologo", "/optimize+", "/platform:x64", "/target:exe", "/utf8output",
+    "/r:System.dll", "/r:System.Core.dll", "/r:System.Web.Extensions.dll",
+    "/out:$PushOut", "$PushSrc"
+)
+if ($HasIcon) { $pushArgs += "/win32icon:$IconPath" }
+& $Csc @pushArgs
 if ($LASTEXITCODE -ne 0) { throw "island-push.exe build failed" }
 
 # 5. Compile DirectComposition + WebView2 host (AgentIsland.exe)
 $AppOut = Join-Path $BinDir "AgentIsland.exe"
 $AppSrc = Join-Path $SrcDir "AgentIsland.cs"
 Write-Host "[3/3] Compiling AgentIsland.exe ..."
-& $Csc /nologo /optimize+ /platform:x64 /target:winexe /utf8output `
-    @IconFlag `
-    "/r:System.dll" `
-    "/r:System.Core.dll" `
-    "/r:System.Drawing.dll" `
-    "/r:System.Windows.Forms.dll" `
-    "/r:System.Web.Extensions.dll" `
-    "/r:$CoreDll" `
-    "/out:$AppOut" `
-    "$AppSrc"
+$appArgs = @(
+    "/nologo", "/optimize+", "/platform:x64", "/target:winexe", "/utf8output",
+    "/r:System.dll", "/r:System.Core.dll", "/r:System.Drawing.dll",
+    "/r:System.Windows.Forms.dll", "/r:System.Web.Extensions.dll",
+    "/r:$CoreDll", "/out:$AppOut", "$AppSrc"
+)
+if ($HasIcon) { $appArgs += "/win32icon:$IconPath" }
+& $Csc @appArgs
 if ($LASTEXITCODE -ne 0) { throw "AgentIsland.exe build failed" }
 
 Write-Host "BUILD_OK: $BinDir"
