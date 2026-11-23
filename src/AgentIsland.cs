@@ -138,6 +138,8 @@ namespace AgentIsland
         public string TranscriptPath;
         public string AnnotationPath;
         public string ApprovalStepKey;
+        public DateTime LastTranscriptWriteUtc;
+        public DateTime LastAnnotationWriteUtc;
         public long Timestamp;
     }
 
@@ -384,7 +386,9 @@ namespace AgentIsland
         private readonly NotifyIcon _trayIcon;
         private readonly System.Windows.Forms.Timer _tickTimer;
         private readonly System.Windows.Forms.Timer _passthroughTimer;
+        private readonly System.Windows.Forms.Timer _inboxDebounceTimer;
         private FileSystemWatcher _inboxWatcher;
+        private DateTime _lastChimeUtc = DateTime.MinValue;
 
         private UserSettings _settings = new UserSettings();
         private bool _webReady = false;
@@ -502,6 +506,13 @@ namespace AgentIsland
                 _passthroughTimer.Tick += OnPassthroughPollTick;
                 _passthroughTimer.Start();
             }
+
+            _inboxDebounceTimer = new System.Windows.Forms.Timer { Interval = 80 };
+            _inboxDebounceTimer.Tick += (s, args) =>
+            {
+                _inboxDebounceTimer.Stop();
+                DrainInbox();
+            };
 
             this.Load += OnFormLoad;
             this.Shown += OnFormShown;
@@ -1125,6 +1136,11 @@ namespace AgentIsland
                 if (session.Kind != "working" && session.Kind != "needs_approval") continue;
                 if (!File.Exists(session.TranscriptPath)) continue;
 
+                DateTime mtime = File.GetLastWriteTimeUtc(session.TranscriptPath);
+                if (mtime == session.LastTranscriptWriteUtc && session.Kind != "working") continue;
+                if (mtime == session.LastTranscriptWriteUtc && (DateTime.UtcNow - mtime).TotalSeconds > 12.0) continue;
+                session.LastTranscriptWriteUtc = mtime;
+
                 string lastLine = ReadLastNonEmptyLine(session.TranscriptPath);
                 if (string.IsNullOrWhiteSpace(lastLine)) continue;
 
@@ -1318,6 +1334,10 @@ namespace AgentIsland
                 if (session.Kind == "working") continue;
                 if (string.IsNullOrEmpty(session.AnnotationPath) || !File.Exists(session.AnnotationPath)) continue;
 
+                DateTime mtime = File.GetLastWriteTimeUtc(session.AnnotationPath);
+                if (mtime == session.LastAnnotationWriteUtc) continue;
+                session.LastAnnotationWriteUtc = mtime;
+
                 long viewedMs = ReadAnnotationLastViewMs(session.AnnotationPath);
                 if (viewedMs > session.Timestamp + 2500)
                 {
@@ -1351,6 +1371,9 @@ namespace AgentIsland
         private void OnHealthAndRadarTick(object sender, EventArgs e)
         {
             EnsureTodayCounter();
+
+            // 0. Fallback drain in case a massive burst outpaced FileSystemWatcher
+            DrainInbox();
 
             // 1. Check transcript.jsonl for blocked approval prompts
             if (CheckTranscriptApprovals())
@@ -1547,6 +1570,10 @@ namespace AgentIsland
         private void PlayAlertSound(bool isHealth)
         {
             if (_settings.Muted) return;
+            DateTime nowUtc = DateTime.UtcNow;
+            // Cooldown 2.5s for AI alerts so 30 concurrent agents never trigger an audio storm
+            if (!isHealth && (nowUtc - _lastChimeUtc).TotalMilliseconds < 2500) return;
+            _lastChimeUtc = nowUtc;
             try
             {
                 if (isHealth) SystemSounds.Exclamation.Play();
@@ -1588,6 +1615,7 @@ namespace AgentIsland
             _inboxWatcher = new FileSystemWatcher(_inboxDir, "*.json")
             {
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
+                InternalBufferSize = 65536, // 64 KB buffer prevents event drops under 30+ agent bursts
                 EnableRaisingEvents = true
             };
             _inboxWatcher.Created += OnInboxFileChanged;
@@ -1597,8 +1625,35 @@ namespace AgentIsland
         private void OnInboxFileChanged(object sender, FileSystemEventArgs e)
         {
             if (this.IsDisposed) return;
-            try { this.BeginInvoke((Action)(() => DrainInbox())); }
+            try
+            {
+                this.BeginInvoke((Action)(() =>
+                {
+                    // Coalesce bursts within 80ms into a single batch DrainInbox + UI render
+                    if (_inboxDebounceTimer != null)
+                    {
+                        _inboxDebounceTimer.Stop();
+                        _inboxDebounceTimer.Start();
+                    }
+                    else
+                    {
+                        DrainInbox();
+                    }
+                }));
+            }
             catch { }
+        }
+
+        private void EnforceSessionCapacity(int maxSessions)
+        {
+            if (_sessions.Count <= maxSessions) return;
+            var victims = _sessions.Values
+                .OrderBy(s => s.Kind == "working" ? 0 : (s.Level <= 1 ? 1 : 2))
+                .ThenBy(s => s.Timestamp)
+                .Take(_sessions.Count - maxSessions)
+                .Select(s => s.ConversationId)
+                .ToList();
+            foreach (var id in victims) _sessions.Remove(id);
         }
 
         private void DrainInbox()
@@ -1717,6 +1772,7 @@ namespace AgentIsland
 
             if (changed)
             {
+                EnforceSessionCapacity(80);
                 UpdateTrayTooltip();
                 EnsureTopMost();
                 if (hasNewAlert)
@@ -2172,10 +2228,12 @@ namespace AgentIsland
             return target;
         }
 
-        private IntPtr FocusTerminalWindow()
+        private IntPtr FocusTerminalWindow(string projectHint)
         {
             string[] preferredProcs = new[] { "WindowsTerminal", "wezterm-gui", "alacritty", "Code", "pwsh", "powershell", "cmd" };
             IntPtr[] matches = new IntPtr[preferredProcs.Length];
+            IntPtr titleMatched = IntPtr.Zero;
+            string hint = (projectHint ?? "").Trim();
             uint myPid = (uint)Process.GetCurrentProcess().Id;
 
             EnumWindows((hWnd, lParam) =>
@@ -2184,20 +2242,36 @@ namespace AgentIsland
                 uint pid;
                 GetWindowThreadProcessId(hWnd, out pid);
                 if (pid == myPid) return true;
-                if (GetWindowTextLength(hWnd) <= 0) return true;
+                int tlen = GetWindowTextLength(hWnd);
+                if (tlen <= 0) return true;
 
                 try
                 {
                     using (var p = Process.GetProcessById((int)pid))
                     {
                         string pname = p.ProcessName ?? "";
+                        int procIdx = -1;
                         for (int i = 0; i < preferredProcs.Length; i++)
                         {
-                            if (matches[i] == IntPtr.Zero && string.Equals(pname, preferredProcs[i], StringComparison.OrdinalIgnoreCase))
+                            if (string.Equals(pname, preferredProcs[i], StringComparison.OrdinalIgnoreCase))
                             {
-                                matches[i] = hWnd;
+                                procIdx = i;
                                 break;
                             }
+                        }
+                        if (procIdx >= 0)
+                        {
+                            if (!string.IsNullOrEmpty(hint) && titleMatched == IntPtr.Zero)
+                            {
+                                var sb = new StringBuilder(tlen + 1);
+                                GetWindowText(hWnd, sb, sb.Capacity);
+                                if (sb.ToString().IndexOf(hint, StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    titleMatched = hWnd;
+                                    return false;
+                                }
+                            }
+                            if (matches[procIdx] == IntPtr.Zero) matches[procIdx] = hWnd;
                         }
                     }
                 }
@@ -2205,10 +2279,13 @@ namespace AgentIsland
                 return true;
             }, IntPtr.Zero);
 
-            IntPtr target = IntPtr.Zero;
-            for (int i = 0; i < matches.Length; i++)
+            IntPtr target = titleMatched;
+            if (target == IntPtr.Zero)
             {
-                if (matches[i] != IntPtr.Zero) { target = matches[i]; break; }
+                for (int i = 0; i < matches.Length; i++)
+                {
+                    if (matches[i] != IntPtr.Zero) { target = matches[i]; break; }
+                }
             }
             if (target == IntPtr.Zero) return IntPtr.Zero;
 
@@ -2252,7 +2329,7 @@ namespace AgentIsland
             if (string.Equals(src, "ClaudeCode", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(src, "Codex", StringComparison.OrdinalIgnoreCase))
             {
-                IntPtr termHwnd = FocusTerminalWindow();
+                IntPtr termHwnd = FocusTerminalWindow(targetSession.Project ?? targetSession.SessionName);
                 if (termHwnd == IntPtr.Zero)
                 {
                     Log("FocusTerminal FAILED: no supported terminal window found");
@@ -2874,6 +2951,63 @@ namespace AgentIsland
                 record("ux_hover_health_orb_no_bounce", orbHoverOk,
                     string.Format("orbCenter=({0:F0},{1:F0}) coveredMidMorph={2} survivedBounce={3}", orbCenterX, orbCenterY, orbStillCovered, orbHoverState.Contains("\"view\":\"health\"")));
 
+                // (i) 30-Agent Concurrent Burst Stress Test (10 Antigravity + 10 ClaudeCode + 10 Codex)
+                _sessions.Clear();
+                var stressSw = Stopwatch.StartNew();
+                string[] sources30 = new[] { "antigravity", "ClaudeCode", "Codex" };
+                for (int si = 0; si < 3; si++)
+                {
+                    string srcName = sources30[si];
+                    for (int k = 1; k <= 10; k++)
+                    {
+                        string evKind = (k == 1) ? "needs_approval" : ((k <= 3) ? "needs_decision" : ((k <= 6) ? "needs_reply" : "working"));
+                        int evLvl = InferNotificationLevel(evKind);
+                        var evDict = new Dictionary<string, object>
+                        {
+                            { "source", srcName },
+                            { "kind", evKind },
+                            { "level", evLvl },
+                            { "conversationId", string.Format("stress-{0}-{1}", si, k) },
+                            { "sessionName", string.Format("{0}-task-{1}", srcName == "antigravity" ? "agy" : (srcName == "ClaudeCode" ? "cc" : "cdx"), k) },
+                            { "project", "fleet-repo-" + k },
+                            { "title", evKind == "needs_approval" ? "待批准命令" : (evKind == "needs_decision" ? "等你拍板" : (evKind == "needs_reply" ? "等你回复" : "思考中")) },
+                            { "summary", "Concurrent stress item #" + k },
+                            { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
+                        };
+                        string fp = Path.Combine(_inboxDir, string.Format("stress-{0:D2}-{1:D2}.json", si, k));
+                        File.WriteAllText(fp, _json.Serialize(evDict), new UTF8Encoding(false));
+                    }
+                }
+                DrainInbox();
+                stressSw.Stop();
+                bool zeroDrop30 = _sessions.Count == 30;
+                // Collapse to compact -> verify Fleet Mode pill aggregates 18 alerts across 3 brands
+                SendCommandToUi("outside_click");
+                await Task.Delay(250);
+                string fleetCompact = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify({text:document.getElementById('main-island').innerText.replace(/\\s+/g,' ').trim(), w:Math.round(document.getElementById('main-island').getBoundingClientRect().width), hasFleet:!!document.querySelector('.fleet-strip')})"));
+                // Open Agent Plane -> verify all 30 items rendered & filter by ClaudeCode narrows to 10!
+                SendCommandToUi("open_overview");
+                await Task.Delay(280);
+                string planeAll30 = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify({rows:document.querySelectorAll('.ov-item').length, h:Math.round(document.getElementById('main-island').getBoundingClientRect().height), fits:document.getElementById('main-island').getBoundingClientRect().bottom <= window.innerHeight - 16})"));
+                await _coreWebView.ExecuteScriptAsync("(function(){var b=document.querySelector('[data-action=\"set-plane-filter\"][data-val=\"ClaudeCode\"]');if(b)b.click();})()");
+                await Task.Delay(180);
+                string planeFiltered10 = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify({rows:document.querySelectorAll('.ov-item').length})"));
+
+                // Capture visual screenshot of 30-agent Agent Plane for human inspection
+                using (var ms30 = new MemoryStream())
+                {
+                    await _coreWebView.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, ms30);
+                    File.WriteAllBytes(Path.Combine(_selfTestDir, "stress-30-plane.png"), ms30.ToArray());
+                }
+
+                bool stress30Ok = zeroDrop30
+                    && fleetCompact.Contains("\"hasFleet\":true")
+                    && planeAll30.Contains("\"rows\":30") && planeAll30.Contains("\"fits\":true")
+                    && planeFiltered10.Contains("\"rows\":10");
+                record("stress_30_agents_fleet_and_filter", stress30Ok,
+                    string.Format("ingested={0}/30 in {1}ms | fleet={2} | all={3} | ccFilter={4}",
+                        _sessions.Count, stressSw.ElapsedMilliseconds, fleetCompact, planeAll30, planeFiltered10));
+
                 // 4. Frontend JS error check
                 string jsErrJson = await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__diagErrors || [])");
                 string jsErrUnquoted = UnquoteJsString(jsErrJson);
@@ -3135,6 +3269,7 @@ namespace AgentIsland
             }
             if (_passthroughTimer != null) _passthroughTimer.Stop();
             if (_tickTimer != null) _tickTimer.Stop();
+            if (_inboxDebounceTimer != null) _inboxDebounceTimer.Stop();
             if (_inboxWatcher != null)
             {
                 _inboxWatcher.EnableRaisingEvents = false;

@@ -513,6 +513,75 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      overflow-y: auto;
+      max-height: 150px;
+      padding-right: 2px;
+    }
+
+    .ov-list::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .ov-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .ov-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+    }
+
+    .fleet-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .fleet-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #f4f4f5;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      color: #a1a1aa;
+      cursor: pointer;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .filter-pill.active {
+      border-color: rgba(96, 165, 250, 0.7);
+      background: rgba(59, 130, 246, 0.2);
+      color: #f4f4f5;
+    }
+
+    .filter-pill svg {
+      width: 11px;
+      height: 11px;
     }
 
     .ov-item {
@@ -664,6 +733,7 @@
       manualHealthOpen: false,
       ctxOpen: false,
       ctxTarget: "agent", // agent | health
+      planeFilter: "all", // all | antigravity | ClaudeCode | Codex | other
       activeAlertId: "",
       tickerIdx: 0,
       countdown: {
@@ -871,11 +941,44 @@
       return { item: state.alerts[idx], idx };
     }
 
+    function normalizeSourceKey(source) {
+      const s = (source || "antigravity").toLowerCase();
+      if (s === "antigravity" || s === "agy") return "antigravity";
+      if (s === "claudecode" || s === "claude") return "ClaudeCode";
+      if (s === "codex" || s === "openai") return "Codex";
+      return "other";
+    }
+
+    function countBySource(items) {
+      const map = { antigravity: 0, ClaudeCode: 0, Codex: 0, other: 0 };
+      for (let i = 0; i < items.length; i++) {
+        map[normalizeSourceKey(items[i].source)]++;
+      }
+      return map;
+    }
+
+    function renderFleetChips(counts) {
+      const order = ["antigravity", "ClaudeCode", "Codex", "other"];
+      let out = "";
+      for (let i = 0; i < order.length; i++) {
+        const k = order[i];
+        if (counts[k] > 0) {
+          out += `<span class="fleet-chip"><span class="brand-icon">${getBrandGlyph(k)}</span><span>${counts[k]}</span></span>`;
+        }
+      }
+      return out;
+    }
+
     function computeMainSize(view) {
       if (view === "agy") return { w: 438, h: state.toastText ? 148 : 132, r: 22 };
       if (view === "health") return { w: 438, h: 162, r: 22 };
-      if (view === "overview") return { w: 438, h: 174, r: 22 };
+      if (view === "overview") {
+        const total = state.alerts.length + state.working.length;
+        return { w: 438, h: total > 3 ? 232 : 174, r: 22 };
+      }
+      if (state.alerts.length > 5) return { w: 232, h: 36, r: 18 };
       if (state.alerts.length > 0) return { w: 196, h: 36, r: 18 };
+      if (state.working.length > 5) return { w: 216, h: 36, r: 18 };
       if (state.working.length > 0) return { w: 168, h: 36, r: 18 };
       return { w: state.muted ? 94 : 78, h: 36, r: 18 };
     }
@@ -1268,7 +1371,21 @@
       let renderKey = "";
 
       if (state.view === "compact") {
-        if (state.alerts.length > 0) {
+        if (state.alerts.length > 5) {
+          // High-concurrency Fleet Mode: show brand glyph counts at a glance instead of a 100s ticker!
+          const top = state.alerts[0];
+          const st = getAlertStyle(top.kind);
+          const counts = countBySource(state.alerts);
+          mainIsland.classList.add(st.glow);
+          renderKey = `compact-fleet-alert-${top.kind}-${counts.antigravity}-${counts.ClaudeCode}-${counts.Codex}-${counts.other}-${state.alerts.length}`;
+          html = `
+            <div class="pill-bar${enterCls}" data-action="open-overview-pin">
+              <div class="fleet-strip">${renderFleetChips(counts)}</div>
+              <div class="pill-right">
+                <span class="mini-badge" style="background:${st.color}26;color:${st.color}">${state.alerts.length}</span>
+              </div>
+            </div>`;
+        } else if (state.alerts.length > 0) {
           const tIdx = state.tickerIdx % state.alerts.length;
           const cur = state.alerts[tIdx];
           const st = getAlertStyle(cur.kind);
@@ -1287,6 +1404,18 @@
               </div>
               <div class="pill-right">
                 <span class="mini-badge" style="background:${st.color}26;color:${st.color}">${escapeHtml(rightBadge)}</span>
+              </div>
+            </div>`;
+        } else if (state.working.length > 5) {
+          // High-concurrency Working Fleet Mode (e.g. 10 AGY + 10 Claude + 10 Codex running simultaneously)
+          mainIsland.classList.add("glow-blue");
+          const counts = countBySource(state.working);
+          renderKey = `compact-fleet-work-${counts.antigravity}-${counts.ClaudeCode}-${counts.Codex}-${counts.other}-${state.working.length}`;
+          html = `
+            <div class="pill-bar${enterCls}" data-action="open-overview-pin">
+              <div class="fleet-strip">${renderFleetChips(counts)}</div>
+              <div class="pill-right">
+                <span class="wave-bars" aria-hidden="true"><span></span><span></span><span></span></span>
               </div>
             </div>`;
         } else if (state.working.length > 0) {
@@ -1447,41 +1576,59 @@
             </div>
           </div>`;
       } else if (state.view === "overview") {
-        // Pure Agent Plane — focused strictly on AI sessions, alerts & history (language lives only in right-click menu)
+        // Pure Agent Plane — scales seamlessly from 1 to 30+ concurrent agents via brand filter pills + scrollable list
+        const allActive = state.alerts.concat(state.working);
+        const totalActive = allActive.length;
+        const srcCounts = countBySource(allActive);
+        if (state.planeFilter !== "all" && (!srcCounts[state.planeFilter] || srcCounts[state.planeFilter] <= 0)) {
+          state.planeFilter = "all";
+        }
+
+        const filterMatches = (item) => state.planeFilter === "all" || normalizeSourceKey(item.source) === state.planeFilter;
+        const visAlerts = state.alerts.filter(filterMatches);
+        const visWorking = state.working.filter(filterMatches);
+
+        let filterBarHtml = "";
+        if (totalActive > 3) {
+          const pills = [
+            `<button class="filter-pill ${state.planeFilter === 'all' ? 'active' : ''}" data-action="set-plane-filter" data-val="all">${isEn() ? 'All' : '全部'} ${totalActive}</button>`
+          ];
+          const order = ["antigravity", "ClaudeCode", "Codex", "other"];
+          for (let i = 0; i < order.length; i++) {
+            const k = order[i];
+            if (srcCounts[k] > 0) {
+              pills.push(`<button class="filter-pill ${state.planeFilter === k ? 'active' : ''}" data-action="set-plane-filter" data-val="${k}">${getBrandGlyph(k)}<span>${srcCounts[k]}</span></button>`);
+            }
+          }
+          filterBarHtml = `<div class="filter-bar">${pills.join("")}</div>`;
+        }
+
         let listHtml = "";
-        let rowCount = 0;
-        if (state.alerts.length > 0) {
-          for (let i = 0; i < Math.min(state.alerts.length, 3); i++) {
-            const a = state.alerts[i];
-            const st = getAlertStyle(a.kind);
-            const sName = getSessionLabel(a);
-            const bLabel = localizeAlertBadge(a, st);
-            listHtml += `<div class="ov-item">
-              <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(a.source, st.color)}</span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(bLabel)} (${formatWait(a.timestamp)})</span></div>
-              <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">${isEn() ? "Open" : "处理"}</button>
-            </div>`;
-            rowCount++;
-          }
+        for (let i = 0; i < visAlerts.length; i++) {
+          const a = visAlerts[i];
+          const st = getAlertStyle(a.kind);
+          const sName = getSessionLabel(a);
+          const bLabel = localizeAlertBadge(a, st);
+          listHtml += `<div class="ov-item">
+            <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(a.source, st.color)}</span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(bLabel)} (${formatWait(a.timestamp)})</span></div>
+            <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">${isEn() ? "Open" : "处理"}</button>
+          </div>`;
         }
-        if (rowCount < 3 && state.working.length > 0) {
-          for (let i = 0; i < Math.min(state.working.length, 3 - rowCount); i++) {
-            const w = state.working[i];
-            listHtml += `<div class="ov-item">
-              <div class="ov-item-left"><span class="brand-icon brand-pulse">${getBrandGlyph(w.source)}</span><span class="ov-item-text"><strong>${escapeHtml(getSessionLabel(w))}</strong></span></div>
-              <span class="wave-bars" aria-hidden="true"><span></span><span></span><span></span></span>
-            </div>`;
-            rowCount++;
-          }
+        for (let i = 0; i < visWorking.length; i++) {
+          const w = visWorking[i];
+          listHtml += `<div class="ov-item">
+            <div class="ov-item-left"><span class="brand-icon brand-pulse">${getBrandGlyph(w.source)}</span><span class="ov-item-text"><strong>${escapeHtml(getSessionLabel(w))}</strong></span></div>
+            <span class="wave-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+          </div>`;
         }
-        if (rowCount < 3 && state.history.length > 0) {
-          for (let i = 0; i < Math.min(state.history.length, 3 - rowCount); i++) {
+        if (totalActive <= 2 && state.history.length > 0 && state.planeFilter === "all") {
+          for (let i = 0; i < Math.min(state.history.length, 3 - totalActive); i++) {
             const h = state.history[i];
             const hSt = getAlertStyle(h.kind);
             listHtml += `<div class="ov-item">
               <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(h.source, "#71717a")}</span><span class="ov-item-text" style="color:#a1a1aa">${isEn() ? "Recent · " : "已看 · "}${escapeHtml(getSessionLabel(h))} · ${escapeHtml(localizeAlertBadge(h, hSt))}</span></div>
               <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">${isEn() ? "Restore" : "恢复"}</button>
             </div>`;
-            rowCount++;
           }
         }
         if (!listHtml) {
@@ -1496,9 +1643,9 @@
           ? `<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><line x1="9.6" y1="5" x2="12.6" y2="9"/><line x1="12.6" y1="5" x2="9.6" y2="9"/></svg>`
           : `<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><path d="M9.4 5a2.6 2.6 0 0 1 0 4"/><path d="M11 3.4a4.8 4.8 0 0 1 0 7.2"/></svg>`;
 
-        renderKey = `ov-${state.resolvedLang}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}`;
+        renderKey = `ov-${state.resolvedLang}-${state.planeFilter}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${visAlerts.length}-${visWorking.length}`;
         html = `
-          <div class="card${enterCls}" style="justify-content:flex-start;gap:10px;">
+          <div class="card${enterCls}" style="justify-content:flex-start;gap:8px;">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="brand-icon">${getBrandGlyph("antigravity", "#60a5fa")}</span>
@@ -1511,6 +1658,7 @@
                 <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
+            ${filterBarHtml}
             <div class="ov-list">${listHtml}</div>
           </div>`;
       }
@@ -1558,7 +1706,7 @@
           hoverOpenTimer = null;
           if (state.view === "compact" && !state.ctxOpen) {
             state.pinned = false;
-            if (state.alerts.length > 0) {
+            if (state.alerts.length > 0 && state.alerts.length <= 5) {
               const cur = state.alerts[state.tickerIdx % state.alerts.length];
               state.view = "agy";
               state.activeAlertId = cur ? cur.id : state.alerts[0].id;
@@ -1834,6 +1982,12 @@
           applyLocalLanguage(langPref, "");
           try { localStorage.setItem("agentisland_lang", state.language); } catch (e) {}
           postHost({ type: "set_language", language: state.language });
+          render(true);
+          break;
+        case "set-plane-filter":
+          state.planeFilter = target.getAttribute("data-val") || "all";
+          state.pinned = true;
+          armAutoCollapse(60000);
           render(true);
           break;
         case "toggle-mute":
