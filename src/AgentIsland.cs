@@ -2713,7 +2713,7 @@ namespace AgentIsland
                 PushStateToUi(false, null); // simulate 3s tick
                 await Task.Delay(220);
                 string manualHealthState = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify({view:window.__uxDebug().view, title:document.getElementById('main-island').innerText})"));
-                bool manualHealthOk = manualHealthState.Contains("\"view\":\"health\"") && manualHealthState.Contains("12m");
+                bool manualHealthOk = manualHealthState.Contains("\"view\":\"health\"") && (manualHealthState.Contains("12/50m") || manualHealthState.Contains("12m"));
                 record("ux_manual_health_survives_tick", manualHealthOk, manualHealthState.Length > 120 ? manualHealthState.Substring(0, 120) : manualHealthState);
 
                 // (b) Active health countdown must NOT be killed by incoming AI alert!
@@ -2825,7 +2825,7 @@ namespace AgentIsland
                 // (f) Outside click closes BOTH open context menu AND expanded card cleanly!
                 SendCommandToUi("open_overview");
                 await Task.Delay(150);
-                await _coreWebView.ExecuteScriptAsync("document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
+                await _coreWebView.ExecuteScriptAsync("document.getElementById('main-island').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
                 await Task.Delay(150);
                 string beforeOutside = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__uxDebug())"));
                 SendCommandToUi("outside_click");
@@ -2835,7 +2835,7 @@ namespace AgentIsland
                     && afterOutside.Contains("\"ctxOpen\":false") && afterOutside.Contains("\"view\":\"compact\"");
                 record("ux_outside_click_collapses_all", outsideOk, "before=" + beforeOutside + " | after=" + afterOutside);
 
-                // (g) Language auto-detection & live EN/ZH toggle
+                // (g) Language auto-detection & live EN/ZH toggle on pure Agent Plane
                 SetLanguagePreference("en");
                 SendCommandToUi("open_overview");
                 await Task.Delay(180);
@@ -2843,7 +2843,7 @@ namespace AgentIsland
                 SetLanguagePreference("zh");
                 await Task.Delay(180);
                 string zhText = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("document.getElementById('main-island').innerText"));
-                bool i18nOk = enText.Contains("Seated") && enText.Contains("Start Break") && zhText.Contains("坐姿") && zhText.Contains("做一组护腰");
+                bool i18nOk = enText.Contains("Agent Plane") && enText.Contains("Clear All") && zhText.Contains("Agent Plane") && zhText.Contains("全部已读");
                 record("ux_i18n_auto_and_toggle", i18nOk, "en=" + enText.Replace("\n", " ") + " | zh=" + zhText.Replace("\n", " "));
 
                 // 4. Frontend JS error check

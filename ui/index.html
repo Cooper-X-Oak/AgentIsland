@@ -655,10 +655,11 @@
       working: [],
       history: [],
       muted: false,
-      view: "compact", // compact | agy | health | overview
+      view: "compact", // compact | agy | health | overview (Agent Plane)
       pinned: false,
       manualHealthOpen: false,
       ctxOpen: false,
+      ctxTarget: "agent", // agent | health
       activeAlertId: "",
       tickerIdx: 0,
       countdown: {
@@ -867,11 +868,11 @@
 
     function computeMainSize(view) {
       if (view === "agy") return { w: 438, h: state.toastText ? 148 : 132, r: 22 };
-      if (view === "health") return { w: 438, h: 158, r: 22 };
-      if (view === "overview") return { w: 438, h: 188, r: 22 };
+      if (view === "health") return { w: 438, h: 162, r: 22 };
+      if (view === "overview") return { w: 438, h: 186, r: 22 };
       if (state.alerts.length > 0) return { w: 196, h: 36, r: 18 };
       if (state.working.length > 0) return { w: 168, h: 36, r: 18 };
-      return { w: 112, h: 36, r: 18 };
+      return { w: state.muted ? 94 : 78, h: 36, r: 18 };
     }
 
     function reportHitRectsNow() {
@@ -1091,35 +1092,49 @@
         ctxMenu.innerHTML = "";
         return;
       }
-      const curInt = state.health.intervalMinutes || 50;
-      const intervals = [30, 45, 50, 60].map(m =>
-        `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
-      ).join("");
+      if (state.ctxTarget === "health") {
+        // Right-clicking the Health Ring opens pure Timer & Posture menu
+        const curInt = state.health.intervalMinutes || 50;
+        const intervals = [30, 45, 50, 60].map(m =>
+          `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
+        ).join("");
+        const pauseLabel = state.health.paused
+          ? (isEn() ? `▶ Resume Timer (${state.health.pauseRemainMinutes || 1}m left)` : `▶ 恢复计时提醒（剩 ${state.health.pauseRemainMinutes || 1}m）`)
+          : (isEn() ? "⏸ Pause Timer 1h" : "⏸ 暂停计时 1 小时");
+        const doneLabel = isEn() ? "✓ Stood Up (Reset +1)" : "✓ 刚站过（清零 + 打卡）";
+        const doneCount = isEn() ? `${state.health.todayCount}x` : `${state.health.todayCount}次`;
+
+        ctxMenu.innerHTML = `
+          <button class="ctx-btn" data-action="health-done"><span>${doneLabel}</span><span class="meta-text">${doneCount}</span></button>
+          <div class="ctx-row"><span>⏱ ${isEn() ? "Interval" : "久坐间隔"}</span><div class="int-chips">${intervals}</div></div>
+          <div class="ctx-sep"></div>
+          <button class="ctx-btn" data-action="toggle-pause"><span>${pauseLabel}</span></button>
+          <button class="ctx-btn" data-action="open-health-pin"><span>🏋 ${isEn() ? "Start Break Now" : "立即做一组拉伸"}</span></button>
+          <div class="ctx-sep"></div>
+          <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">${isEn() ? "Close" : "关闭"}</span><span class="meta-text">Alt+\\</span></button>`;
+        return;
+      }
+
+      // Right-clicking the Agent Pill opens pure Agent Plane menu (zero posture clutter!)
       const langChips = [
         { k: "auto", t: isEn() ? "Auto" : "自动" },
         { k: "zh", t: "中" },
         { k: "en", t: "EN" }
       ].map(x => `<button class="int-chip ${state.language === x.k ? 'active' : ''}" data-action="set-language" data-val="${x.k}">${x.t}</button>`).join("");
-
-      const pauseLabel = state.health.paused
-        ? (isEn() ? `▶ Resume Breaks (${state.health.pauseRemainMinutes || 1}m left)` : `▶ 恢复护腰提醒（剩 ${state.health.pauseRemainMinutes || 1}m）`)
-        : (isEn() ? "⏸ Pause Breaks 1h" : "⏸ 暂停护腰 1 小时");
       const muteLabel = state.muted
-        ? (isEn() ? "🔊 Unmute Sounds" : "🔊 开启提示音")
-        : (isEn() ? "🔕 Mute Sounds" : "🔕 静音提示音");
-      const doneLabel = isEn() ? "✓ Stood Up (Reset +1)" : "✓ 刚站过（清零 + 今日打卡）";
-      const doneCount = isEn() ? `${state.health.todayCount}x` : `${state.health.todayCount}次`;
+        ? (isEn() ? "🔊 Unmute Agent Sounds" : "🔊 开启通知提示音")
+        : (isEn() ? "🔕 Mute Agent Sounds" : "🔕 静音通知提示音");
+      const clearItem = state.alerts.length > 0
+        ? `<button class="ctx-btn" data-action="agy-dismiss-all"><span>✓ ${isEn() ? "Clear All Pending Alerts" : "全部待处理标为已读"}</span><span class="meta-text">${state.alerts.length}</span></button><div class="ctx-sep"></div>`
+        : "";
 
       ctxMenu.innerHTML = `
-        <button class="ctx-btn" data-action="health-done"><span>${doneLabel}</span><span class="meta-text">${doneCount}</span></button>
-        <div class="ctx-row"><span>⏱ ${isEn() ? "Interval" : "久坐间隔"}</span><div class="int-chips">${intervals}</div></div>
+        <button class="ctx-btn" data-action="open-overview-pin"><span>⚡ ${isEn() ? "Open Agent Plane" : "打开 Agent 面板"}</span><span class="meta-text">${state.working.length + state.alerts.length}</span></button>
+        ${clearItem}
+        <button class="ctx-btn" data-action="toggle-mute"><span>${muteLabel}</span></button>
         <div class="ctx-row"><span>🌐 ${isEn() ? "Language" : "语言"}</span><div class="int-chips">${langChips}</div></div>
         <div class="ctx-sep"></div>
-        <button class="ctx-btn" data-action="toggle-pause"><span>${pauseLabel}</span></button>
-        <button class="ctx-btn" data-action="toggle-mute"><span>${muteLabel}</span></button>
-        <button class="ctx-btn" data-action="open-health-pin"><span>🏋 ${isEn() ? "Start Posture Break" : "立即做一组护腰动作"}</span></button>
-        <div class="ctx-sep"></div>
-        <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">${isEn() ? "Close Menu" : "关闭菜单"}</span><span class="meta-text">Alt+\\</span></button>`;
+        <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">${isEn() ? "Close" : "关闭"}</span><span class="meta-text">Alt+\\</span></button>`;
     }
 
     // ==================== Priority & Attention Tiering Arbiter ====================
@@ -1264,18 +1279,14 @@
             </div>`;
         } else {
           const muteSvg = state.muted
-            ? `<svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="#71717a" stroke-width="1.4" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><line x1="9.6" y1="5" x2="12.6" y2="9"/><line x1="12.6" y1="5" x2="9.6" y2="9"/></svg>`
+            ? `<svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="#71717a" stroke-width="1.4" stroke-linecap="round"><path d="M2 5.2h2.2L7 2.8v8.4L4.2 8.8H2z"/><line x1="9.6" y1="5" x2="12.6" y2="9"/><line x1="12.6" y1="5" x2="9.6" y2="9"/></svg>`
             : "";
-          renderKey = `compact-idle-${state.health.todayCount}-${state.muted}`;
+          renderKey = `compact-idle-${state.muted}`;
           html = `
-            <div class="pill-bar${enterCls}" data-action="open-overview-pin">
-              <div class="pill-left">
-                <span class="dot" style="background:#22c55e"></span>
-                <span class="brand-icon">${getBrandGlyph("antigravity", "#a1a1aa")}</span>
-              </div>
-              <div class="pill-right">
-                <span class="muted-tag">${muteSvg}✓ ${state.health.todayCount}</span>
-              </div>
+            <div class="pill-bar${enterCls}" data-action="open-overview-pin" style="justify-content:center;gap:8px;padding:0 12px;">
+              <span class="dot" style="background:#22c55e"></span>
+              <span class="brand-icon">${getBrandGlyph("antigravity", "#d4d4d8")}</span>
+              ${muteSvg}
             </div>`;
         }
       } else if (state.view === "agy") {
@@ -1346,22 +1357,23 @@
         const act = ACTIONS[state.health.actionIndex % ACTIONS.length];
         const actTitle = (isEn() && act.title_en) ? act.title_en : act.title;
         const actTip = (isEn() && act.tip_en) ? act.tip_en : act.tip;
+        const curInt = state.health.intervalMinutes || 50;
+        const intervals = [30, 45, 50, 60].map(m =>
+          `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
+        ).join("");
         const agyChip = state.alerts.length > 0
-          ? `<button class="switch-chip" data-action="open-agy-pin">${isEn() ? "⚡ Alerts" : "⚡ 待介入"} (${state.alerts.length})</button>`
+          ? `<button class="switch-chip" data-action="open-agy-pin">⚡ ${state.alerts.length}</button>`
           : "";
         const isDue = !!state.health.alertActive;
+        const pauseTag = state.health.paused
+          ? (isEn() ? ` · Paused ${state.health.pauseRemainMinutes || 1}m` : ` · 暂停 ${state.health.pauseRemainMinutes || 1}m`)
+          : "";
         const badgeText = isEn()
-          ? (isDue ? `${interval}m Break Due` : "Quick Break")
-          : (isDue ? `坐满 ${interval}m · 救腰` : "主动加练 · 救腰");
+          ? (isDue ? `${curInt}m Due` : `Seated ${mins}/${curInt}m`)
+          : (isDue ? `坐满 ${curInt}m` : `坐姿 ${mins}/${curInt}m`);
         const metaText = isEn()
-          ? (state.health.isLateNight
-              ? `Late Night · Break #${state.health.todayCount + 1}`
-              : `Seated ${isDue ? Math.max(mins, interval) : mins}m · ${state.health.todayCount} today`)
-          : (state.health.isLateNight
-              ? `已过凌晨 · 今日第 ${state.health.todayCount + 1} 次`
-              : (isDue
-                  ? `已连坐 ${Math.max(mins, interval)}m · 今日 ${state.health.todayCount} 次`
-                  : `当前已坐 ${mins}m · 今日 ${state.health.todayCount} 次`));
+          ? `${state.health.todayCount} today${pauseTag}`
+          : `今日 ${state.health.todayCount} 次${pauseTag}`;
 
         const cdPct = (state.countdown.active || state.countdown.paused) && state.countdown.total > 0
           ? Math.round(((state.countdown.total - state.countdown.remain) / state.countdown.total) * 100)
@@ -1373,16 +1385,17 @@
           cdLabel = isEn() ? `Paused ${state.countdown.remain}s (Resume ▶)` : `已暂停 ${state.countdown.remain}s（继续 ▶）`;
         }
 
-        renderKey = `health-${state.resolvedLang}-${state.health.actionIndex}-${state.alerts.length}-${mins}-${isDue}-${state.health.todayCount}-${state.countdown.active}-${state.countdown.paused}-${state.countdown.remain}`;
+        renderKey = `health-${state.resolvedLang}-${state.health.actionIndex}-${state.alerts.length}-${mins}-${curInt}-${isDue}-${state.health.todayCount}-${state.health.paused}-${state.health.pauseRemainMinutes}-${state.countdown.active}-${state.countdown.paused}-${state.countdown.remain}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="badge" style="background:rgba(34,197,94,0.2);color:#4ade80;border-color:rgba(34,197,94,0.45)">${escapeHtml(badgeText)}</span>
+                <span class="meta-text">${escapeHtml(metaText)}</span>
               </div>
               <div class="card-top-right">
                 ${agyChip}
-                <span class="meta-text">${escapeHtml(metaText)}</span>
+                <div class="int-chips">${intervals}</div>
                 <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
@@ -1399,78 +1412,82 @@
                 <button class="btn btn-secondary" data-action="health-done">${isEn() ? "Done ✓" : "已动 ✓"}</button>
                 <button class="btn btn-secondary" data-action="health-shuffle">${isEn() ? "Next" : "换"}</button>
                 <button class="btn btn-ghost" data-action="health-snooze">+5m</button>
+                <button class="btn btn-ghost" data-action="toggle-pause">${state.health.paused ? (isEn() ? 'Resume' : '恢复') : (isEn() ? 'Pause' : '暂停')}</button>
               </div>
             </div>
           </div>`;
       } else if (state.view === "overview") {
-        const curInt = state.health.intervalMinutes || 50;
-        const intervals = [30, 45, 50, 60].map(m =>
-          `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
-        ).join("");
+        // Pure Agent Plane — 100% focused on AI agents, sessions, alerts, history, sound & language (zero posture clutter!)
+        const langChips = [
+          { k: "auto", t: isEn() ? "Auto" : "自动" },
+          { k: "zh", t: "中" },
+          { k: "en", t: "EN" }
+        ].map(x => `<button class="int-chip ${state.language === x.k ? 'active' : ''}" data-action="set-language" data-val="${x.k}">${x.t}</button>`).join("");
 
         let listHtml = "";
+        let rowCount = 0;
         if (state.alerts.length > 0) {
-          listHtml += state.alerts.slice(0, 2).map(a => {
+          for (let i = 0; i < Math.min(state.alerts.length, 3); i++) {
+            const a = state.alerts[i];
             const st = getAlertStyle(a.kind);
             const sName = getSessionLabel(a);
             const bLabel = localizeAlertBadge(a, st);
-            return `<div class="ov-item">
+            listHtml += `<div class="ov-item">
               <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(a.source, st.color)}</span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(bLabel)} (${formatWait(a.timestamp)})</span></div>
               <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">${isEn() ? "Open" : "处理"}</button>
             </div>`;
-          }).join("");
-          if (state.alerts.length > 2) {
-            listHtml += `<div class="ov-item">
-              <span class="meta-text">${isEn() ? `+${state.alerts.length - 2} more pending` : `还有 ${state.alerts.length - 2} 条待介入通知`}</span>
-              <button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全部已读"}</button>
-            </div>`;
+            rowCount++;
           }
-        } else if (state.working.length > 0) {
-          listHtml += state.working.slice(0, 2).map(w =>
-            `<div class="ov-item">
+        }
+        if (rowCount < 3 && state.working.length > 0) {
+          for (let i = 0; i < Math.min(state.working.length, 3 - rowCount); i++) {
+            const w = state.working[i];
+            listHtml += `<div class="ov-item">
               <div class="ov-item-left"><span class="brand-icon brand-pulse">${getBrandGlyph(w.source)}</span><span class="ov-item-text"><strong>${escapeHtml(getSessionLabel(w))}</strong></span></div>
               <span class="wave-bars" aria-hidden="true"><span></span><span></span><span></span></span>
-            </div>`
-          ).join("");
+            </div>`;
+            rowCount++;
+          }
+        }
+        if (rowCount < 3 && state.history.length > 0) {
+          for (let i = 0; i < Math.min(state.history.length, 3 - rowCount); i++) {
+            const h = state.history[i];
+            const hSt = getAlertStyle(h.kind);
+            listHtml += `<div class="ov-item">
+              <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(h.source, "#71717a")}</span><span class="ov-item-text" style="color:#a1a1aa">${isEn() ? "Recent · " : "已看 · "}${escapeHtml(getSessionLabel(h))} · ${escapeHtml(localizeAlertBadge(h, hSt))}</span></div>
+              <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">${isEn() ? "Restore" : "恢复"}</button>
+            </div>`;
+            rowCount++;
+          }
+        }
+        if (!listHtml) {
+          listHtml = `<div class="ov-item"><span class="meta-text">${isEn() ? "All agents idle — waiting for hooks from Antigravity, Claude, Codex" : "全部 Agent 待命 · 监听 Antigravity / Claude / Codex"}</span></div>`;
         }
 
-        if (state.history.length > 0 && state.alerts.length <= 2) {
-          const h = state.history[0];
-          const hSt = getAlertStyle(h.kind);
-          listHtml += `<div class="ov-item">
-            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">${isEn() ? "Recent · " : "已看 · "}${escapeHtml(getSessionLabel(h))} · ${escapeHtml(localizeAlertBadge(h, hSt))}</span></div>
-            <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">${isEn() ? "Restore" : "恢复"}</button>
-          </div>`;
-        } else if (!listHtml) {
-          listHtml = `<div class="ov-item"><span class="meta-text">${isEn() ? "No pending alerts" : "暂无待处理会话"}</span></div>`;
-        }
+        const planeStats = isEn()
+          ? `${state.working.length} active · ${state.alerts.length} pending`
+          : `${state.working.length} 运行中 · ${state.alerts.length} 待处理`;
 
-        const pauseText = state.health.paused
-          ? (isEn() ? ` (Paused ${state.health.pauseRemainMinutes || 1}m)` : `（暂停 ${state.health.pauseRemainMinutes || 1}m）`)
-          : "";
-
-        renderKey = `ov-${state.resolvedLang}-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}-${state.health.pauseRemainMinutes}`;
+        renderKey = `ov-${state.resolvedLang}-${state.language}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
-                <span class="dot" style="background:#22c55e"></span>
-                <span class="project-name">${isEn() ? `Seated ${mins}/${curInt}m${pauseText}` : `坐姿 ${mins}/${curInt}m${pauseText}`}</span>
-                <span class="meta-text">${isEn() ? `· ${state.health.todayCount} today` : `· 今日 ${state.health.todayCount} 次`}</span>
+                <span class="brand-icon">${getBrandGlyph("antigravity", "#60a5fa")}</span>
+                <span class="project-name">Agent Plane</span>
+                <span class="meta-text">· ${escapeHtml(planeStats)}</span>
               </div>
               <div class="card-top-right">
-                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全已读"}</button>` : `<div class="int-chips">${intervals}</div>`}
+                ${state.alerts.length > 0 ? `<button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全部已读"}</button>` : ""}
                 <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
             <div class="ov-list">${listHtml}</div>
             <div class="actions">
-              <button class="btn" style="background:#22c55e;color:#052e16" data-action="open-health-pin">${isEn() ? "Start Break" : "做一组护腰"}</button>
               <div class="btn-group">
-                <button class="btn btn-secondary" data-action="health-done">${isEn() ? "Stood Up +1" : "刚站过 +1"}</button>
-                <button class="btn btn-ghost" data-action="toggle-pause">${state.health.paused ? (isEn() ? 'Resume' : '恢复') : (isEn() ? 'Pause 1h' : '暂停1h')}</button>
-                <button class="btn btn-ghost" data-action="toggle-mute">${state.muted ? (isEn() ? 'Unmute' : '开音') : (isEn() ? 'Mute' : '静音')}</button>
+                <button class="btn btn-secondary" data-action="toggle-mute">${state.muted ? (isEn() ? '🔊 Unmute' : '🔊 开启提示音') : (isEn() ? '🔕 Mute' : '🔕 静音')}</button>
               </div>
+              <div class="int-chips">${langChips}</div>
             </div>
           </div>`;
       }
@@ -1506,8 +1523,14 @@
     dock.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
-      // Responsive hover preview across all states (320ms prevents accidental pass-through triggers while staying snappy)
-      if (state.view === "compact" && !state.ctxOpen && !hoverOpenTimer) {
+    });
+
+    // Hovering the LEFT Agent Pill previews Agent Plane (or active alert card)
+    mainIsland.addEventListener("mouseenter", () => {
+      pointerInsideDock = true;
+      if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
+      if (state.view === "compact" && !state.ctxOpen) {
+        if (hoverOpenTimer) clearTimeout(hoverOpenTimer);
         hoverOpenTimer = setTimeout(() => {
           hoverOpenTimer = null;
           if (state.view === "compact" && !state.ctxOpen) {
@@ -1525,6 +1548,24 @@
       }
     });
 
+    // Hovering the RIGHT Health Ring previews Posture & Timer card
+    healthOrb.addEventListener("mouseenter", () => {
+      pointerInsideDock = true;
+      if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
+      if (state.view === "compact" && !state.ctxOpen) {
+        if (hoverOpenTimer) clearTimeout(hoverOpenTimer);
+        hoverOpenTimer = setTimeout(() => {
+          hoverOpenTimer = null;
+          if (state.view === "compact" && !state.ctxOpen) {
+            state.pinned = false;
+            state.manualHealthOpen = true;
+            state.view = "health";
+            render(true);
+          }
+        }, 320);
+      }
+    });
+
     dock.addEventListener("mouseleave", () => {
       pointerInsideDock = false;
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
@@ -1532,6 +1573,7 @@
         hoverCloseTimer = setTimeout(() => {
           hoverCloseTimer = null;
           if (!state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused && !pointerInsideDock) {
+            state.manualHealthOpen = false;
             state.view = "compact";
             render(true);
           }
@@ -1539,11 +1581,30 @@
       }
     });
 
-    // Right-click on pill or orb opens inline context menu
-    dock.addEventListener("contextmenu", (e) => {
+    // Separate context menus: right-click Agent Pill -> Agent menu; right-click Health Ring -> Timer & Posture menu
+    mainIsland.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       clearHoverTimers();
-      state.ctxOpen = !state.ctxOpen;
+      if (state.ctxOpen && state.ctxTarget === "agent") {
+        state.ctxOpen = false;
+      } else {
+        state.ctxTarget = (state.view === "health") ? "health" : "agent";
+        state.ctxOpen = true;
+      }
+      render(false);
+    });
+
+    healthOrb.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearHoverTimers();
+      if (state.ctxOpen && state.ctxTarget === "health") {
+        state.ctxOpen = false;
+      } else {
+        state.ctxTarget = "health";
+        state.ctxOpen = true;
+      }
       render(false);
     });
 
