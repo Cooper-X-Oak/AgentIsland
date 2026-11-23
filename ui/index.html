@@ -628,16 +628,18 @@
 
   <script>
     let ACTIONS = [
-      { title: "原地深蹲 15 个", seconds: 45, tip: "膝盖对准脚尖、臀部往后坐，唤醒久坐睡死的臀肌" },
-      { title: "麦肯基俯卧轻撑", seconds: 30, tip: "手肘撑稳微微抬头，骨盆贴地放松，给腰椎反向减压" },
-      { title: "站起来接水 + 远眺", seconds: 120, tip: "离开椅子走两步，顺便让睫状肌松一口气" },
-      { title: "靠墙静蹲", seconds: 45, tip: "后背贴实墙面、小腿垂直地面，稳住核心不塌腰" },
-      { title: "站立扩胸 + 绕肩", seconds: 60, tip: "双手背后相扣轻轻拉开胸腔，对抗低头圆肩" },
-      { title: "踮脚提踵 25 次", seconds: 40, tip: "站直慢起慢落，促进下肢血液回流" }
+      { title: "原地深蹲 15 个", title_en: "15 Bodyweight Squats", seconds: 45, tip: "膝盖对准脚尖、臀部往后坐，唤醒久坐睡死的臀肌", tip_en: "Track knees over toes, sit hips back, and wake up sleepy glutes." },
+      { title: "麦肯基俯卧轻撑", title_en: "McKenzie Press-Up", seconds: 30, tip: "手肘撑稳微微抬头，骨盆贴地放松，给腰椎反向减压", tip_en: "Prop on elbows, keep hips relaxed on the floor, decompress lower back." },
+      { title: "站起来接水 + 远眺", title_en: "Refill Water + 20ft Gaze", seconds: 120, tip: "离开椅子走两步，顺便让睫状肌松一口气", tip_en: "Walk away from your desk and relax eye focus on a distant point." },
+      { title: "靠墙静蹲", title_en: "Wall Sit Hold", seconds: 45, tip: "后背贴实墙面、小腿垂直地面，稳住核心不塌腰", tip_en: "Press your back flat against the wall, shins vertical, brace your core." },
+      { title: "站立扩胸 + 绕肩", title_en: "Standing Chest Opener", seconds: 60, tip: "双手背后相扣轻轻拉开胸腔，对抗低头圆肩", tip_en: "Clasp hands behind your back and roll shoulders open against hunching." },
+      { title: "踮脚提踵 25 次", title_en: "25 Standing Calf Raises", seconds: 40, tip: "站直慢起慢落，促进下肢血液回流", tip_en: "Rise slowly onto your toes and lower smoothly to boost leg circulation." }
     ];
 
     const state = {
       nowMs: Date.now(),
+      language: "auto", // auto | zh | en
+      resolvedLang: (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en",
       health: {
         seatedSeconds: 0,
         intervalMinutes: 50,
@@ -741,11 +743,59 @@
       </svg>`;
     }
 
+    function isEn() {
+      return state.resolvedLang === "en";
+    }
+
+    function applyLocalLanguage(pref, hostResolved) {
+      const p = (pref || "auto").toLowerCase();
+      state.language = (p === "zh" || p === "en") ? p : "auto";
+      if (state.language === "zh" || state.language === "en") {
+        state.resolvedLang = state.language;
+      } else if (hostResolved === "zh" || hostResolved === "en") {
+        state.resolvedLang = hostResolved;
+      } else {
+        state.resolvedLang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+      }
+      document.documentElement.lang = isEn() ? "en" : "zh-CN";
+    }
+
+    try {
+      const savedLang = localStorage.getItem("agentisland_lang");
+      if (savedLang === "auto" || savedLang === "zh" || savedLang === "en") {
+        applyLocalLanguage(savedLang, "");
+      }
+    } catch (e) {}
+
     function getCompactKindTag(kind) {
+      if (isEn()) {
+        if (kind === "error") return "Err";
+        if (kind === "needs_approval") return "Perm";
+        if (kind === "needs_decision") return "Ask";
+        return "";
+      }
       if (kind === "error") return "报错";
       if (kind === "needs_approval") return "审批";
       if (kind === "needs_decision") return "拍板";
       return "";
+    }
+
+    function localizeAlertBadge(item, st) {
+      const standardZh = { "报错卡住": true, "待批准命令": true, "待批准权限": true, "等你拍板": true, "等你介入": true, "等你回复": true, "触顶暂停": true };
+      if (!item.title || standardZh[item.title]) return st.label;
+      return item.title;
+    }
+
+    function localizeSummary(text) {
+      const s = String(text || "");
+      if (!isEn()) return s;
+      return s
+        .replace(/^待你回复：/, "Question: ")
+        .replace(/^请求批准\s+/, "Approve ")
+        .replace(/^越沙盒命令：/, "Command: ")
+        .replace(/^本轮回复已完成，等你下一步指示$/, "Reply ready — waiting for your next instruction")
+        .replace(/^Claude Code 本轮回复已完成$/, "Claude Code finished this turn")
+        .replace(/^Codex 本轮任务已完成，等你下一步指示$/, "Codex finished this turn");
     }
 
     function getSessionLabel(item) {
@@ -781,25 +831,25 @@
     }
 
     function formatWait(ts) {
-      if (!ts) return "刚刚";
+      if (!ts) return isEn() ? "Just now" : "刚刚";
       const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-      if (sec < 45) return "刚刚";
+      if (sec < 45) return isEn() ? "Just now" : "刚刚";
       const m = Math.floor(sec / 60);
-      if (m < 60) return `已等 ${m}m`;
-      return `已等 ${Math.floor(m / 60)}h${m % 60}m`;
+      if (m < 60) return isEn() ? `${m}m ago` : `已等 ${m}m`;
+      return isEn() ? `${Math.floor(m / 60)}h${m % 60}m` : `已等 ${Math.floor(m / 60)}h${m % 60}m`;
     }
 
     function getAlertStyle(kind) {
       if (kind === "error") {
-        return { color: "#ef4444", textColor: "#ffffff", glow: "glow-red", label: "报错卡住" };
+        return { color: "#ef4444", textColor: "#ffffff", glow: "glow-red", label: isEn() ? "Error" : "报错卡住" };
       }
       if (kind === "needs_approval") {
-        return { color: "#f97316", textColor: "#09090b", glow: "glow-amber", label: "待批准命令" };
+        return { color: "#f97316", textColor: "#09090b", glow: "glow-amber", label: isEn() ? "Approval" : "待批准命令" };
       }
       if (kind === "needs_decision") {
-        return { color: "#f59e0b", textColor: "#09090b", glow: "glow-amber", label: "等你拍板" };
+        return { color: "#f59e0b", textColor: "#09090b", glow: "glow-amber", label: isEn() ? "Decision" : "等你拍板" };
       }
-      return { color: "#3b82f6", textColor: "#ffffff", glow: "glow-blue", label: "等你回复" };
+      return { color: "#3b82f6", textColor: "#ffffff", glow: "glow-blue", label: isEn() ? "Reply" : "等你回复" };
     }
 
     function getActiveAlert() {
@@ -986,7 +1036,9 @@
       if (!btn || !fill) return;
       if (state.countdown.active) {
         const pct = Math.max(0, Math.min(100, Math.round(((state.countdown.total - state.countdown.remain) / state.countdown.total) * 100)));
-        btn.textContent = `跟练中 ${state.countdown.remain}s（点暂停）`;
+        btn.textContent = isEn()
+          ? `${state.countdown.remain}s left (Pause)`
+          : `跟练中 ${state.countdown.remain}s（点暂停）`;
         fill.style.width = pct + "%";
       }
     }
@@ -1009,17 +1061,20 @@
       let label = String(mins);
       if (state.health.paused) {
         strokeColor = "#71717a";
-        label = "停";
+        label = isEn() ? "||" : "停";
       } else if (state.health.snoozed) {
         strokeColor = "#f59e0b";
         label = "+5";
       } else if (state.health.alertActive || pct >= 1) {
         strokeColor = "#4ade80";
-        label = "起";
+        label = isEn() ? "Go" : "起";
       } else if (pct >= 0.8) {
         strokeColor = "#f59e0b";
       }
 
+      healthOrb.title = isEn()
+        ? "Click for Posture Break · Right-click for Quick Menu"
+        : "点击打开护腰行动卡 · 右键快捷菜单";
       healthOrb.classList.toggle("orb-alert", !!state.health.alertActive);
       healthOrb.innerHTML = `
         <svg class="orb-svg" viewBox="0 0 36 36">
@@ -1040,18 +1095,31 @@
       const intervals = [30, 45, 50, 60].map(m =>
         `<button class="int-chip ${curInt === m ? 'active' : ''}" data-action="set-interval" data-val="${m}">${m}m</button>`
       ).join("");
+      const langChips = [
+        { k: "auto", t: isEn() ? "Auto" : "自动" },
+        { k: "zh", t: "中" },
+        { k: "en", t: "EN" }
+      ].map(x => `<button class="int-chip ${state.language === x.k ? 'active' : ''}" data-action="set-language" data-val="${x.k}">${x.t}</button>`).join("");
+
       const pauseLabel = state.health.paused
-        ? `▶ 恢复护腰提醒（剩 ${state.health.pauseRemainMinutes || 1}m）`
-        : "⏸ 暂停护腰 1 小时";
+        ? (isEn() ? `▶ Resume Breaks (${state.health.pauseRemainMinutes || 1}m left)` : `▶ 恢复护腰提醒（剩 ${state.health.pauseRemainMinutes || 1}m）`)
+        : (isEn() ? "⏸ Pause Breaks 1h" : "⏸ 暂停护腰 1 小时");
+      const muteLabel = state.muted
+        ? (isEn() ? "🔊 Unmute Sounds" : "🔊 开启提示音")
+        : (isEn() ? "🔕 Mute Sounds" : "🔕 静音提示音");
+      const doneLabel = isEn() ? "✓ Stood Up (Reset +1)" : "✓ 刚站过（清零 + 今日打卡）";
+      const doneCount = isEn() ? `${state.health.todayCount}x` : `${state.health.todayCount}次`;
+
       ctxMenu.innerHTML = `
-        <button class="ctx-btn" data-action="health-done"><span>✓ 刚站过（清零 + 今日打卡）</span><span class="meta-text">${state.health.todayCount}次</span></button>
-        <div class="ctx-row"><span>⏱ 久坐间隔</span><div class="int-chips">${intervals}</div></div>
+        <button class="ctx-btn" data-action="health-done"><span>${doneLabel}</span><span class="meta-text">${doneCount}</span></button>
+        <div class="ctx-row"><span>⏱ ${isEn() ? "Interval" : "久坐间隔"}</span><div class="int-chips">${intervals}</div></div>
+        <div class="ctx-row"><span>🌐 ${isEn() ? "Language" : "语言"}</span><div class="int-chips">${langChips}</div></div>
         <div class="ctx-sep"></div>
         <button class="ctx-btn" data-action="toggle-pause"><span>${pauseLabel}</span></button>
-        <button class="ctx-btn" data-action="toggle-mute"><span>${state.muted ? '🔊 开启提示音' : '🔕 静音提示音'}</span></button>
-        <button class="ctx-btn" data-action="open-health-pin"><span>🏋 立即做一组护腰动作</span></button>
+        <button class="ctx-btn" data-action="toggle-mute"><span>${muteLabel}</span></button>
+        <button class="ctx-btn" data-action="open-health-pin"><span>🏋 ${isEn() ? "Start Posture Break" : "立即做一组护腰动作"}</span></button>
         <div class="ctx-sep"></div>
-        <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">关闭菜单</span><span class="meta-text">Alt+\\</span></button>`;
+        <button class="ctx-btn" data-action="close-ctx"><span style="color:#a1a1aa">${isEn() ? "Close Menu" : "关闭菜单"}</span><span class="meta-text">Alt+\\</span></button>`;
     }
 
     // ==================== Priority & Attention Tiering Arbiter ====================
@@ -1225,38 +1293,42 @@
         const subMeta = (item.project && item.project !== sessionTitle && item.project !== "Antigravity")
           ? ` · ${item.project}`
           : "";
+        const badgeLabel = localizeAlertBadge(item, st);
+        const displaySummary = localizeSummary(item.summary);
         const healthChip = state.health.alertActive
-          ? `<button class="switch-chip" data-action="open-health-pin">🟢 护腰</button>`
+          ? `<button class="switch-chip" data-action="open-health-pin">${isEn() ? "🟢 Break" : "🟢 护腰"}</button>`
           : "";
         const nextBtn = state.alerts.length > 1
-          ? `<button class="btn btn-secondary" data-action="agy-next">下一条 (${idx + 1}/${state.alerts.length})</button>`
+          ? `<button class="btn btn-secondary" data-action="agy-next">${isEn() ? "Next" : "下一条"} (${idx + 1}/${state.alerts.length})</button>`
           : "";
         const focusLabel = (!item.source || item.source === "antigravity")
-          ? "直达该会话 ↗"
-          : ((item.source === "ClaudeCode" || item.source === "Codex") ? "切到终端 ↗" : "标记已读 ✓");
+          ? (isEn() ? "Open Session ↗" : "直达该会话 ↗")
+          : ((item.source === "ClaudeCode" || item.source === "Codex")
+              ? (isEn() ? "Focus Terminal ↗" : "切到终端 ↗")
+              : (isEn() ? "Mark Read ✓" : "标记已读 ✓"));
         const toastHtml = state.toastText
           ? `<div class="toast-line">⚠ ${escapeHtml(state.toastText)}</div>`
           : "";
 
-        renderKey = `agy-${item.id}-${item.source}-${item.kind}-${sessionTitle}-${subMeta}-${item.summary}-${idx}-${state.alerts.length}-${waitText}-${state.health.alertActive}-${state.copyTip}-${state.toastText}`;
+        renderKey = `agy-${state.resolvedLang}-${item.id}-${item.source}-${item.kind}-${sessionTitle}-${subMeta}-${displaySummary}-${idx}-${state.alerts.length}-${waitText}-${state.health.alertActive}-${state.copyTip}-${state.toastText}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="brand-icon">${getBrandGlyph(item.source)}</span>
-                <span class="badge" style="background:${st.color}24;color:${st.color};border-color:${st.color}55">${escapeHtml(item.title || st.label)}</span>
+                <span class="badge" style="background:${st.color}24;color:${st.color};border-color:${st.color}55">${escapeHtml(badgeLabel)}</span>
                 <span class="project-name">${escapeHtml(sessionTitle)}</span>
                 ${subMeta ? `<span class="source-sub">${escapeHtml(subMeta)}</span>` : ""}
               </div>
               <div class="card-top-right">
                 ${healthChip}
                 <span class="meta-text">${escapeHtml(waitText)}</span>
-                <button class="icon-btn" data-action="copy-alert" data-text="${escapeHtml(sessionTitle + ' | ' + item.summary)}" title="复制摘要">${state.copyTip ? '✓' : '⧉'}</button>
-                <button class="icon-btn" data-action="collapse" title="收起">−</button>
+                <button class="icon-btn" data-action="copy-alert" data-text="${escapeHtml(sessionTitle + ' | ' + displaySummary)}" title="${isEn() ? 'Copy' : '复制摘要'}">${state.copyTip ? '✓' : '⧉'}</button>
+                <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
             <div>
-              <div class="summary">${escapeHtml(item.summary)}</div>
+              <div class="summary">${escapeHtml(displaySummary)}</div>
               ${toastHtml}
             </div>
             <div class="actions">
@@ -1265,35 +1337,43 @@
               </button>
               <div class="btn-group">
                 ${nextBtn}
-                <button class="btn btn-ghost" data-action="agy-dismiss" data-id="${escapeHtml(item.id)}">知道了</button>
+                <button class="btn btn-ghost" data-action="agy-dismiss" data-id="${escapeHtml(item.id)}">${isEn() ? "Dismiss" : "知道了"}</button>
               </div>
             </div>
           </div>`;
       } else if (state.view === "health") {
         mainIsland.classList.add("glow-green");
         const act = ACTIONS[state.health.actionIndex % ACTIONS.length];
+        const actTitle = (isEn() && act.title_en) ? act.title_en : act.title;
+        const actTip = (isEn() && act.tip_en) ? act.tip_en : act.tip;
         const agyChip = state.alerts.length > 0
-          ? `<button class="switch-chip" data-action="open-agy-pin">⚡ 待介入 (${state.alerts.length})</button>`
+          ? `<button class="switch-chip" data-action="open-agy-pin">${isEn() ? "⚡ Alerts" : "⚡ 待介入"} (${state.alerts.length})</button>`
           : "";
         const isDue = !!state.health.alertActive;
-        const badgeText = isDue ? `坐满 ${interval}m · 救腰` : "主动加练 · 救腰";
-        const metaText = state.health.isLateNight
-          ? `已过凌晨 · 今日第 ${state.health.todayCount + 1} 次`
-          : (isDue
-              ? `已连坐 ${Math.max(mins, interval)}m · 今日 ${state.health.todayCount} 次`
-              : `当前已坐 ${mins}m · 今日 ${state.health.todayCount} 次`);
+        const badgeText = isEn()
+          ? (isDue ? `${interval}m Break Due` : "Quick Break")
+          : (isDue ? `坐满 ${interval}m · 救腰` : "主动加练 · 救腰");
+        const metaText = isEn()
+          ? (state.health.isLateNight
+              ? `Late Night · Break #${state.health.todayCount + 1}`
+              : `Seated ${isDue ? Math.max(mins, interval) : mins}m · ${state.health.todayCount} today`)
+          : (state.health.isLateNight
+              ? `已过凌晨 · 今日第 ${state.health.todayCount + 1} 次`
+              : (isDue
+                  ? `已连坐 ${Math.max(mins, interval)}m · 今日 ${state.health.todayCount} 次`
+                  : `当前已坐 ${mins}m · 今日 ${state.health.todayCount} 次`));
 
         const cdPct = (state.countdown.active || state.countdown.paused) && state.countdown.total > 0
           ? Math.round(((state.countdown.total - state.countdown.remain) / state.countdown.total) * 100)
           : 0;
-        let cdLabel = `开始跟练 ${act.seconds}s ▶`;
+        let cdLabel = isEn() ? `Start ${act.seconds}s ▶` : `开始跟练 ${act.seconds}s ▶`;
         if (state.countdown.active) {
-          cdLabel = `跟练中 ${state.countdown.remain}s（点暂停）`;
+          cdLabel = isEn() ? `${state.countdown.remain}s left (Pause)` : `跟练中 ${state.countdown.remain}s（点暂停）`;
         } else if (state.countdown.paused) {
-          cdLabel = `已暂停 ${state.countdown.remain}s（继续 ▶）`;
+          cdLabel = isEn() ? `Paused ${state.countdown.remain}s (Resume ▶)` : `已暂停 ${state.countdown.remain}s（继续 ▶）`;
         }
 
-        renderKey = `health-${state.health.actionIndex}-${state.alerts.length}-${mins}-${isDue}-${state.health.todayCount}-${state.countdown.active}-${state.countdown.paused}-${state.countdown.remain}`;
+        renderKey = `health-${state.resolvedLang}-${state.health.actionIndex}-${state.alerts.length}-${mins}-${isDue}-${state.health.todayCount}-${state.countdown.active}-${state.countdown.paused}-${state.countdown.remain}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
@@ -1303,12 +1383,12 @@
               <div class="card-top-right">
                 ${agyChip}
                 <span class="meta-text">${escapeHtml(metaText)}</span>
-                <button class="icon-btn" data-action="collapse" title="收起">−</button>
+                <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
             <div>
-              <div class="main-title">${escapeHtml(act.title)}（${act.seconds} 秒）</div>
-              <div class="sub-tip">${escapeHtml(act.tip)}</div>
+              <div class="main-title">${escapeHtml(actTitle)}${isEn() ? ` (${act.seconds}s)` : `（${act.seconds} 秒）`}</div>
+              <div class="sub-tip">${escapeHtml(actTip)}</div>
               <div class="countdown-track"><div id="countdown-fill" class="countdown-fill" style="width:${cdPct}%"></div></div>
             </div>
             <div class="actions">
@@ -1316,8 +1396,8 @@
                 ${cdLabel}
               </button>
               <div class="btn-group">
-                <button class="btn btn-secondary" data-action="health-done">已动 ✓</button>
-                <button class="btn btn-secondary" data-action="health-shuffle">换</button>
+                <button class="btn btn-secondary" data-action="health-done">${isEn() ? "Done ✓" : "已动 ✓"}</button>
+                <button class="btn btn-secondary" data-action="health-shuffle">${isEn() ? "Next" : "换"}</button>
                 <button class="btn btn-ghost" data-action="health-snooze">+5m</button>
               </div>
             </div>
@@ -1333,15 +1413,16 @@
           listHtml += state.alerts.slice(0, 2).map(a => {
             const st = getAlertStyle(a.kind);
             const sName = getSessionLabel(a);
+            const bLabel = localizeAlertBadge(a, st);
             return `<div class="ov-item">
-              <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(a.source, st.color)}</span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(a.title || st.label)}（${formatWait(a.timestamp)}）</span></div>
-              <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">处理</button>
+              <div class="ov-item-left"><span class="brand-icon">${getBrandGlyph(a.source, st.color)}</span><span class="ov-item-text"><strong>${escapeHtml(sName)}</strong> · ${escapeHtml(bLabel)} (${formatWait(a.timestamp)})</span></div>
+              <button class="switch-chip" data-action="open-agy-pin" data-id="${escapeHtml(a.id)}">${isEn() ? "Open" : "处理"}</button>
             </div>`;
           }).join("");
           if (state.alerts.length > 2) {
             listHtml += `<div class="ov-item">
-              <span class="meta-text">还有 ${state.alerts.length - 2} 条待介入通知</span>
-              <button class="switch-chip" data-action="agy-dismiss-all">全部已读</button>
+              <span class="meta-text">${isEn() ? `+${state.alerts.length - 2} more pending` : `还有 ${state.alerts.length - 2} 条待介入通知`}</span>
+              <button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全部已读"}</button>
             </div>`;
           }
         } else if (state.working.length > 0) {
@@ -1355,39 +1436,40 @@
 
         if (state.history.length > 0 && state.alerts.length <= 2) {
           const h = state.history[0];
+          const hSt = getAlertStyle(h.kind);
           listHtml += `<div class="ov-item">
-            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">已看 · ${escapeHtml(getSessionLabel(h))} · ${escapeHtml(h.title || h.summary)}</span></div>
-            <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">恢复</button>
+            <div class="ov-item-left"><span class="dot" style="background:#71717a"></span><span class="ov-item-text" style="color:#a1a1aa">${isEn() ? "Recent · " : "已看 · "}${escapeHtml(getSessionLabel(h))} · ${escapeHtml(localizeAlertBadge(h, hSt))}</span></div>
+            <button class="switch-chip" data-action="history-restore" data-id="${escapeHtml(h.id)}">${isEn() ? "Restore" : "恢复"}</button>
           </div>`;
         } else if (!listHtml) {
-          listHtml = `<div class="ov-item"><span class="meta-text">暂无待处理会话</span></div>`;
+          listHtml = `<div class="ov-item"><span class="meta-text">${isEn() ? "No pending alerts" : "暂无待处理会话"}</span></div>`;
         }
 
         const pauseText = state.health.paused
-          ? `（暂停 ${state.health.pauseRemainMinutes || 1}m）`
+          ? (isEn() ? ` (Paused ${state.health.pauseRemainMinutes || 1}m)` : `（暂停 ${state.health.pauseRemainMinutes || 1}m）`)
           : "";
 
-        renderKey = `ov-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}-${state.health.pauseRemainMinutes}`;
+        renderKey = `ov-${state.resolvedLang}-${mins}-${curInt}-${state.health.todayCount}-${state.alerts.length}-${state.working.length}-${state.history.length}-${state.muted}-${state.health.paused}-${state.health.pauseRemainMinutes}`;
         html = `
           <div class="card${enterCls}">
             <div class="card-top">
               <div class="card-top-left">
                 <span class="dot" style="background:#22c55e"></span>
-                <span class="project-name">坐姿 ${mins}/${curInt}m${pauseText}</span>
-                <span class="meta-text">· 今日 ${state.health.todayCount} 次</span>
+                <span class="project-name">${isEn() ? `Seated ${mins}/${curInt}m${pauseText}` : `坐姿 ${mins}/${curInt}m${pauseText}`}</span>
+                <span class="meta-text">${isEn() ? `· ${state.health.todayCount} today` : `· 今日 ${state.health.todayCount} 次`}</span>
               </div>
               <div class="card-top-right">
-                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">全已读</button>` : `<div class="int-chips">${intervals}</div>`}
-                <button class="icon-btn" data-action="collapse" title="收起">−</button>
+                ${state.alerts.length > 1 ? `<button class="switch-chip" data-action="agy-dismiss-all">${isEn() ? "Clear All" : "全已读"}</button>` : `<div class="int-chips">${intervals}</div>`}
+                <button class="icon-btn" data-action="collapse" title="${isEn() ? 'Collapse' : '收起'}">−</button>
               </div>
             </div>
             <div class="ov-list">${listHtml}</div>
             <div class="actions">
-              <button class="btn" style="background:#22c55e;color:#052e16" data-action="open-health-pin">做一组护腰</button>
+              <button class="btn" style="background:#22c55e;color:#052e16" data-action="open-health-pin">${isEn() ? "Start Break" : "做一组护腰"}</button>
               <div class="btn-group">
-                <button class="btn btn-secondary" data-action="health-done">刚站过 +1</button>
-                <button class="btn btn-ghost" data-action="toggle-pause">${state.health.paused ? '恢复' : '暂停1h'}</button>
-                <button class="btn btn-ghost" data-action="toggle-mute">${state.muted ? '开音' : '静音'}</button>
+                <button class="btn btn-secondary" data-action="health-done">${isEn() ? "Stood Up +1" : "刚站过 +1"}</button>
+                <button class="btn btn-ghost" data-action="toggle-pause">${state.health.paused ? (isEn() ? 'Resume' : '恢复') : (isEn() ? 'Pause 1h' : '暂停1h')}</button>
+                <button class="btn btn-ghost" data-action="toggle-mute">${state.muted ? (isEn() ? 'Unmute' : '开音') : (isEn() ? 'Mute' : '静音')}</button>
               </div>
             </div>
           </div>`;
@@ -1658,6 +1740,13 @@
           postHost({ type: "set_interval", minutes: mins });
           render(true);
           break;
+        case "set-language":
+          const langPref = target.getAttribute("data-val") || "auto";
+          applyLocalLanguage(langPref, "");
+          try { localStorage.setItem("agentisland_lang", state.language); } catch (e) {}
+          postHost({ type: "set_language", language: state.language });
+          render(true);
+          break;
         case "toggle-mute":
           state.muted = !state.muted;
           postHost({ type: "toggle_mute" });
@@ -1685,6 +1774,9 @@
           state.working = Array.isArray(msg.working) ? msg.working : [];
           state.history = Array.isArray(msg.history) ? msg.history : [];
           state.muted = !!msg.muted;
+          if (typeof msg.language === "string") {
+            applyLocalLanguage(msg.language, msg.resolvedLanguage || "");
+          }
           resolveAutoView(!!msg.triggerExpand, msg.focusKind || "");
           render(false);
         } else if (msg.type === "toast") {

@@ -136,7 +136,7 @@ Run the automated full-stack verification suite anytime:
 * [x] Externalized `config/actions.json` + guided countdown timer + daily streak
 * [ ] Multi-monitor selector (choose primary / active cursor monitor)
 * [ ] Native adapters for Cursor, Windsurf, Cline, and OpenCode
-* [ ] Optional English / Chinese UI language toggle in settings
+* [x] Auto-detect Windows system language + instant English / Chinese toggle (`Auto / 中 / EN`)
 
 ## License
 

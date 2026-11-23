@@ -3,42 +3,54 @@
     "id": "squats",
     "category": "glutes",
     "title": "原地深蹲 15 个",
+    "title_en": "15 Bodyweight Squats",
     "seconds": 45,
-    "tip": "膝盖对准脚尖、臀部往后坐，唤醒久坐睡死的臀肌"
+    "tip": "膝盖对准脚尖、臀部往后坐，唤醒久坐睡死的臀肌",
+    "tip_en": "Track knees over toes, sit hips back, and wake up sleepy glutes."
   },
   {
     "id": "mckenzie",
     "category": "lumbar",
     "title": "麦肯基俯卧轻撑",
+    "title_en": "McKenzie Press-Up",
     "seconds": 30,
-    "tip": "手肘撑稳微微抬头，骨盆贴地放松，给腰椎反向减压"
+    "tip": "手肘撑稳微微抬头，骨盆贴地放松，给腰椎反向减压",
+    "tip_en": "Prop on elbows, keep hips relaxed on the floor, decompress lower back."
   },
   {
     "id": "water-gaze",
     "category": "eyes",
     "title": "站起来接水 + 远眺",
+    "title_en": "Refill Water + 20ft Gaze",
     "seconds": 120,
-    "tip": "离开椅子走两步，顺便让眼睛睫状肌松一口气"
+    "tip": "离开椅子走两步，顺便让眼睛睫状肌松一口气",
+    "tip_en": "Walk away from your desk and relax eye focus on a distant point."
   },
   {
     "id": "wall-sit",
     "category": "core",
     "title": "靠墙静蹲",
+    "title_en": "Wall Sit Hold",
     "seconds": 45,
-    "tip": "后背贴实墙面、小腿垂直地面，稳住核心不塌腰"
+    "tip": "后背贴实墙面、小腿垂直地面，稳住核心不塌腰",
+    "tip_en": "Press your back flat against the wall, shins vertical, brace your core."
   },
   {
     "id": "chest-opener",
     "category": "shoulder",
     "title": "站立扩胸 + 绕肩",
+    "title_en": "Standing Chest Opener",
     "seconds": 60,
-    "tip": "双手背后相扣轻轻拉开胸腔，对抗低头圆肩"
+    "tip": "双手背后相扣轻轻拉开胸腔，对抗低头圆肩",
+    "tip_en": "Clasp hands behind your back and roll shoulders open against hunching."
   },
   {
     "id": "calf-raises",
     "category": "circulation",
     "title": "踮脚提踵 25 次",
+    "title_en": "25 Standing Calf Raises",
     "seconds": 40,
-    "tip": "站直慢起慢落，促进下肢血液回流"
+    "tip": "站直慢起慢落，促进下肢血液回流",
+    "tip_en": "Rise slowly onto your toes and lower smoothly to boost leg circulation."
   }
 ]

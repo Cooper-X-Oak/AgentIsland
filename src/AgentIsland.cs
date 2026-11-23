@@ -148,6 +148,7 @@ namespace AgentIsland
         public int BreakIntervalMinutes = 50;
         public string TodayDate = "";
         public int TodayBreakCount = 0;
+        public string Language = "auto"; // auto | zh | en
     }
 
     internal sealed class IslandForm : Form
@@ -1032,6 +1033,11 @@ namespace AgentIsland
                 this.Close();
             });
 
+            var langMenu = new ToolStripMenuItem("Language / 语言");
+            langMenu.DropDownItems.Add(new ToolStripMenuItem("Auto (System / 跟随系统)", null, (s, e) => SetLanguagePreference("auto")));
+            langMenu.DropDownItems.Add(new ToolStripMenuItem("简体中文", null, (s, e) => SetLanguagePreference("zh")));
+            langMenu.DropDownItems.Add(new ToolStripMenuItem("English", null, (s, e) => SetLanguagePreference("en")));
+
             menu.Items.Add(showItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(testHealth);
@@ -1040,6 +1046,7 @@ namespace AgentIsland
             menu.Items.Add(resetSeat);
             menu.Items.Add(_pauseMenuItem);
             menu.Items.Add(_muteMenuItem);
+            menu.Items.Add(langMenu);
             menu.Items.Add(recenterItem);
             menu.Items.Add(reloadUi);
             menu.Items.Add(new ToolStripSeparator());
@@ -1412,8 +1419,11 @@ namespace AgentIsland
             {
                 int mins = _seatedSeconds / 60;
                 int pending = _sessions.Values.Count(s => s.Kind != "working");
-                string text = string.Format("灵动岛 · 坐 {0}/{1}m · 今日救腰 {2} 次 · 待介入 {3}",
-                    mins, _settings.BreakIntervalMinutes, _settings.TodayBreakCount, pending);
+                string text = ResolveEffectiveLanguage() == "en"
+                    ? string.Format("AgentIsland · Sit {0}/{1}m · Breaks {2} · Pending {3}",
+                        mins, _settings.BreakIntervalMinutes, _settings.TodayBreakCount, pending)
+                    : string.Format("AgentIsland · 坐 {0}/{1}m · 今日救腰 {2} 次 · 待介入 {3}",
+                        mins, _settings.BreakIntervalMinutes, _settings.TodayBreakCount, pending);
                 if (text.Length > 63) text = text.Substring(0, 63);
                 _trayIcon.Text = text;
             }
@@ -1469,6 +1479,29 @@ namespace AgentIsland
             {
                 _pauseMenuItem.Text = _pausedUntil.HasValue ? "恢复久坐提醒" : "暂停久坐提醒 1 小时";
             }
+        }
+
+        private string ResolveEffectiveLanguage()
+        {
+            string pref = (_settings.Language ?? "auto").Trim().ToLowerInvariant();
+            if (pref == "zh" || pref == "en") return pref;
+            try
+            {
+                string uiLang = CultureInfo.CurrentUICulture.Name ?? "";
+                if (uiLang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)) return "zh";
+            }
+            catch { }
+            return "en";
+        }
+
+        private void SetLanguagePreference(string lang)
+        {
+            string norm = (lang ?? "auto").Trim().ToLowerInvariant();
+            if (norm != "auto" && norm != "zh" && norm != "en") norm = "auto";
+            _settings.Language = norm;
+            if (string.IsNullOrEmpty(_selfTestDir)) SaveSettings();
+            UpdateTrayTooltip();
+            PushStateToUi(false, null);
         }
 
         private void ToggleMute()
@@ -1805,7 +1838,9 @@ namespace AgentIsland
                 { "alerts", alerts },
                 { "working", working },
                 { "history", history },
-                { "muted", _settings.Muted }
+                { "muted", _settings.Muted },
+                { "language", _settings.Language ?? "auto" },
+                { "resolvedLanguage", ResolveEffectiveLanguage() }
             };
 
             try { _coreWebView.PostWebMessageAsJson(_json.Serialize(payload)); }
@@ -1905,6 +1940,10 @@ namespace AgentIsland
 
                     case "set_interval":
                         SetBreakInterval(GetInt(msg, "minutes", 50));
+                        break;
+
+                    case "set_language":
+                        SetLanguagePreference(GetStr(msg, "language"));
                         break;
 
                     case "play_done_chime":
@@ -2217,7 +2256,9 @@ namespace AgentIsland
                 if (termHwnd == IntPtr.Zero)
                 {
                     Log("FocusTerminal FAILED: no supported terminal window found");
-                    SendToastToUi("未检测到已打开的终端窗口，已保留通知");
+                    SendToastToUi(ResolveEffectiveLanguage() == "en"
+                        ? "No open terminal window found (alert kept)"
+                        : "未检测到已打开的终端窗口，已保留通知");
                     return;
                 }
                 ArchiveAndRemoveSession(focusId);
@@ -2238,7 +2279,9 @@ namespace AgentIsland
             if (targetHwnd == IntPtr.Zero)
             {
                 Log("FocusAntigravity FAILED: window not found, keeping alert");
-                SendToastToUi("未检测到 Antigravity 窗口，已保留通知");
+                SendToastToUi(ResolveEffectiveLanguage() == "en"
+                    ? "Antigravity window not found (alert kept)"
+                    : "未检测到 Antigravity 窗口，已保留通知");
                 return;
             }
 
@@ -2377,8 +2420,10 @@ namespace AgentIsland
                                 { "id", GetStr(d, "id") },
                                 { "category", GetStr(d, "category") },
                                 { "title", title },
+                                { "title_en", GetStr(d, "title_en") },
                                 { "seconds", Math.Max(10, GetInt(d, "seconds", 45)) },
-                                { "tip", GetStr(d, "tip") }
+                                { "tip", GetStr(d, "tip") },
+                                { "tip_en", GetStr(d, "tip_en") }
                             });
                         }
                     }
@@ -2406,6 +2451,8 @@ namespace AgentIsland
                 _settings.BreakIntervalMinutes = Math.Max(10, GetInt(dict, "breakIntervalMinutes", 50));
                 _settings.TodayDate = GetStr(dict, "todayDate");
                 _settings.TodayBreakCount = Math.Max(0, GetInt(dict, "todayBreakCount", 0));
+                string lang = GetStr(dict, "language").Trim().ToLowerInvariant();
+                if (lang == "auto" || lang == "zh" || lang == "en") _settings.Language = lang;
                 object mutedObj;
                 if (dict.TryGetValue("muted", out mutedObj) && mutedObj is bool)
                 {
@@ -2425,7 +2472,8 @@ namespace AgentIsland
                     { "muted", _settings.Muted },
                     { "breakIntervalMinutes", _settings.BreakIntervalMinutes },
                     { "todayDate", _settings.TodayDate },
-                    { "todayBreakCount", _settings.TodayBreakCount }
+                    { "todayBreakCount", _settings.TodayBreakCount },
+                    { "language", _settings.Language ?? "auto" }
                 };
                 File.WriteAllText(_settingsPath, _json.Serialize(dict), new UTF8Encoding(false));
             }
@@ -2786,6 +2834,17 @@ namespace AgentIsland
                 bool outsideOk = beforeOutside.Contains("\"ctxOpen\":true") && beforeOutside.Contains("\"view\":\"overview\"")
                     && afterOutside.Contains("\"ctxOpen\":false") && afterOutside.Contains("\"view\":\"compact\"");
                 record("ux_outside_click_collapses_all", outsideOk, "before=" + beforeOutside + " | after=" + afterOutside);
+
+                // (g) Language auto-detection & live EN/ZH toggle
+                SetLanguagePreference("en");
+                SendCommandToUi("open_overview");
+                await Task.Delay(180);
+                string enText = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("document.getElementById('main-island').innerText"));
+                SetLanguagePreference("zh");
+                await Task.Delay(180);
+                string zhText = UnquoteJsString(await _coreWebView.ExecuteScriptAsync("document.getElementById('main-island').innerText"));
+                bool i18nOk = enText.Contains("Seated") && enText.Contains("Start Break") && zhText.Contains("坐姿") && zhText.Contains("做一组护腰");
+                record("ux_i18n_auto_and_toggle", i18nOk, "en=" + enText.Replace("\n", " ") + " | zh=" + zhText.Replace("\n", " "));
 
                 // 4. Frontend JS error check
                 string jsErrJson = await _coreWebView.ExecuteScriptAsync("JSON.stringify(window.__diagErrors || [])");
