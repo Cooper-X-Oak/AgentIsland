@@ -40,6 +40,24 @@
       justify-content: center;
       gap: 8px;
       background: transparent !important;
+      opacity: 1;
+      transition: opacity 150ms ease;
+    }
+
+    .dock.idle-ghost {
+      opacity: 0.72;
+    }
+
+    .dock.idle-ghost:hover {
+      opacity: 1;
+    }
+
+    .dock.idle-ghost .island,
+    .dock.idle-ghost .health-orb {
+      border-color: rgba(255, 255, 255, 0.09);
+      box-shadow:
+        0 4px 10px rgba(0, 0, 0, 0.24),
+        0 1px 0 rgba(255, 255, 255, 0.05) inset;
     }
 
     .dock.merged {
@@ -50,7 +68,7 @@
       position: relative;
       background: linear-gradient(180deg, rgba(19, 21, 28, 0.97) 0%, rgba(10, 11, 15, 0.98) 100%);
       color: #f4f4f5;
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.13);
       box-shadow:
         0 6px 14px rgba(0, 0, 0, 0.34),
         0 2px 4px rgba(0, 0, 0, 0.24),
@@ -89,11 +107,11 @@
     }
 
     .island.glow-blue {
-      border-color: rgba(59, 130, 246, 0.68);
+      border-color: rgba(96, 165, 250, 0.36);
       box-shadow:
-        0 6px 14px rgba(0, 0, 0, 0.36),
-        0 0 10px rgba(59, 130, 246, 0.24),
-        0 1px 0 rgba(255, 255, 255, 0.08) inset;
+        0 6px 14px rgba(0, 0, 0, 0.34),
+        0 0 8px rgba(59, 130, 246, 0.14),
+        0 1px 0 rgba(255, 255, 255, 0.07) inset;
     }
 
     .island.glow-red {
@@ -111,7 +129,7 @@
       height: 36px;
       border-radius: 18px;
       background: linear-gradient(180deg, rgba(19, 21, 28, 0.97) 0%, rgba(10, 11, 15, 0.98) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.13);
       box-shadow:
         0 6px 14px rgba(0, 0, 0, 0.34),
         0 2px 4px rgba(0, 0, 0, 0.24),
@@ -1670,7 +1688,18 @@
 
       renderHealthOrb();
       renderContextMenu();
+      updateIdleGhost();
       scheduleHitRectSync();
+    }
+
+    function updateIdleGhost() {
+      const isIdleGhost = (state.view === "compact")
+        && state.alerts.length === 0
+        && state.working.length === 0
+        && !state.health.alertActive
+        && !state.ctxOpen
+        && !pointerInsideDock;
+      dock.classList.toggle("idle-ghost", isIdleGhost);
     }
 
     // ==================== Compact Ticker + Hover Preview ====================
@@ -1693,12 +1722,14 @@
 
     dock.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
+      updateIdleGhost();
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
     });
 
     // Hovering the LEFT Agent Pill previews Agent Plane (or active alert card)
     mainIsland.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
+      updateIdleGhost();
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
       if (state.view === "compact" && !state.ctxOpen) {
         if (hoverOpenTimer) clearTimeout(hoverOpenTimer);
@@ -1722,6 +1753,7 @@
     // Hovering the RIGHT Health Ring previews Posture & Timer card
     healthOrb.addEventListener("mouseenter", () => {
       pointerInsideDock = true;
+      updateIdleGhost();
       if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; }
       if (state.view === "compact" && !state.ctxOpen) {
         if (hoverOpenTimer) clearTimeout(hoverOpenTimer);
@@ -1744,6 +1776,7 @@
         return;
       }
       pointerInsideDock = false;
+      updateIdleGhost();
       if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null; }
       if (state.view !== "compact" && !state.pinned && !state.ctxOpen && !state.countdown.active && !state.countdown.paused) {
         hoverCloseTimer = setTimeout(() => {

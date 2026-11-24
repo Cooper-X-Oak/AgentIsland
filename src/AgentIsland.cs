@@ -398,10 +398,16 @@ namespace AgentIsland
         private bool _clickThrough = true;
         private bool _wasOutsideMouseDown = false;
 
-        // Native smooth horizontal dragging
+        // Native smooth horizontal dragging + center magnetic snap
+        private const int CenterSnapThresholdLogical = 16;
         private bool _nativeDragging = false;
         private int _dragStartMouseX = 0;
         private int _dragStartOffsetX = 0;
+
+        internal static int SnapHorizontalOffset(int rawOffsetX)
+        {
+            return Math.Abs(rawOffsetX) <= CenterSnapThresholdLogical ? 0 : rawOffsetX;
+        }
 
         // Health State
         private int _seatedSeconds = 0;
@@ -937,7 +943,8 @@ namespace AgentIsland
                 {
                     double scale = GetScaleFactor();
                     int deltaPhys = Cursor.Position.X - _dragStartMouseX;
-                    _settings.OffsetX = _dragStartOffsetX + (int)Math.Round(deltaPhys / scale);
+                    int rawOffset = _dragStartOffsetX + (int)Math.Round(deltaPhys / scale);
+                    _settings.OffsetX = SnapHorizontalOffset(rawOffset);
                     ApplyWindowBounds(_logicalW, _logicalH, false);
                     return;
                 }
@@ -2676,7 +2683,7 @@ namespace AgentIsland
                 bool viewedCleared = CheckViewedSessions() && !_sessions.ContainsKey("viewed-conv");
                 record("viewed_session_auto_clear", viewedCleared, "cleared=" + viewedCleared);
 
-                // 2.6 Test drag offset clamping (no deadzone after dragging past screen edge)
+                // 2.6 Test drag offset clamping + center magnetic snap (+/-16px -> 0)
                 int origOffset = _settings.OffsetX;
                 _settings.OffsetX = -99999;
                 ApplyWindowBounds(FixedCanvasLogicalW, FixedCanvasLogicalH, false);
@@ -2684,6 +2691,16 @@ namespace AgentIsland
                 _settings.OffsetX = origOffset;
                 ApplyWindowBounds(FixedCanvasLogicalW, FixedCanvasLogicalH, false);
                 record("drag_offset_clamped", offsetClamped, "clampedOk=" + offsetClamped);
+
+                bool snapOk = SnapHorizontalOffset(0) == 0
+                    && SnapHorizontalOffset(12) == 0
+                    && SnapHorizontalOffset(-16) == 0
+                    && SnapHorizontalOffset(17) == 17
+                    && SnapHorizontalOffset(-28) == -28;
+                record("drag_center_snap", snapOk,
+                    string.Format("snap12={0} snapNeg16={1} keep17={2} keepNeg28={3}",
+                        SnapHorizontalOffset(12), SnapHorizontalOffset(-16),
+                        SnapHorizontalOffset(17), SnapHorizontalOffset(-28)));
 
                 _sessions.Clear();
                 _sessions["radar-conv"] = new SessionItem
@@ -2766,6 +2783,12 @@ namespace AgentIsland
 
                 stateAudits.Add(await CaptureAndAuditStateAsync("01-split-pill", capturedPngs, record));
 
+                // Verify Idle Ghosting: pure idle compact dock dims to ~0.72, active/expanded restores to 1.0
+                string idleGhostJson = UnquoteJsString(await _coreWebView.ExecuteScriptAsync(
+                    "JSON.stringify((()=>{const d=document.getElementById('dock');return {hasClass:d.classList.contains('idle-ghost'),op:parseFloat(getComputedStyle(d).opacity)};})())"
+                ));
+                bool idleDimOk = idleGhostJson.Contains("\"hasClass\":true") && (idleGhostJson.Contains("0.7") || idleGhostJson.Contains("0.72"));
+
                 // State 2: Split Pill (AGY working + right health ring in parallel!)
                 _sessions["st-work"] = new SessionItem
                 {
@@ -2779,6 +2802,12 @@ namespace AgentIsland
                 };
                 PushStateToUi(false, null);
                 await Task.Delay(500);
+                string activeSolidJson = UnquoteJsString(await _coreWebView.ExecuteScriptAsync(
+                    "JSON.stringify((()=>{const d=document.getElementById('dock');return {hasClass:d.classList.contains('idle-ghost'),op:parseFloat(getComputedStyle(d).opacity)};})())"
+                ));
+                bool activeSolidOk = activeSolidJson.Contains("\"hasClass\":false") && activeSolidJson.Contains("\"op\":1");
+                record("ux_idle_ghost_opacity", idleDimOk && activeSolidOk,
+                    string.Format("idle={0} | active={1}", idleGhostJson, activeSolidJson));
                 Rectangle b2 = this.Bounds;
                 stateAudits.Add(await CaptureAndAuditStateAsync("02-split-working", capturedPngs, record));
 
