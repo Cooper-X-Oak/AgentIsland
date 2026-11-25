@@ -104,7 +104,7 @@ Test both alerts immediately:
 
 | AI Terminal | Status | Setup |
 | :--- | :---: | :--- |
-| **Google Antigravity** (Hooks + `transcript.jsonl` Approval Radar + `Ctrl+K` Exact Session Jump) | Live Verified | `.\adapters\antigravity\install.ps1` |
+| **Google Antigravity** (Hooks + `transcript.jsonl` Approval Radar + Zero-Keystroke Safe Window Focus) | Live Verified | `.\adapters\antigravity\install.ps1` |
 | **Claude Code** (`UserPromptSubmit` / `PermissionRequest` / `Notification` / `Stop` Hooks) | Contract Verified | `.\adapters\claude-code\install.ps1` |
 | **Codex CLI** (`~/.codex/hooks.json` + legacy `notify` + `island-push.exe`) | Contract Verified | `.\adapters\codex-cli\install.ps1` |
 | **Cursor / Windsurf / Cline / OpenCode** | Roadmap | PRs welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) |
@@ -138,7 +138,7 @@ Run the automated full-stack verification suite anytime:
 ## Roadmap
 
 * [x] DirectComposition anti-aliased Split Pill + real cross-process click-through
-* [x] Antigravity hooks + sandbox approval radar + `Ctrl+K` exact conversation jump
+* [x] Antigravity hooks + sandbox approval radar + zero-keystroke safe window focus
 * [x] Claude Code hooks adapter + universal `island-push.exe` CLI
 * [x] Externalized `config/actions.json` + guided countdown timer + daily streak
 * [ ] Multi-monitor selector (choose primary / active cursor monitor)

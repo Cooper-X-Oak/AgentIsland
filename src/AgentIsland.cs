@@ -9,6 +9,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Media;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -218,51 +219,6 @@ namespace AgentIsland
             public uint cbSize;
             public uint dwTime;
         }
-
-        private const uint INPUT_KEYBOARD = 1;
-        private const uint KEYEVENTF_KEYUP = 0x0002;
-        private const ushort VK_CONTROL = 0x11;
-        private const ushort VK_RETURN = 0x0D;
-        private const ushort VK_K = 0x4B;
-        private const ushort VK_V = 0x56;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct INPUT
-        {
-            public uint type;
-            public InputUnion U;
-        }
-
-        [StructLayout(LayoutKind.Explicit)]
-        private struct InputUnion
-        {
-            [FieldOffset(0)] public MOUSEINPUT mi;
-            [FieldOffset(0)] public KEYBDINPUT ki;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MOUSEINPUT
-        {
-            public int dx;
-            public int dy;
-            public uint mouseData;
-            public uint dwFlags;
-            public uint time;
-            public IntPtr dwExtraInfo;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct KEYBDINPUT
-        {
-            public ushort wVk;
-            public ushort wScan;
-            public uint dwFlags;
-            public uint time;
-            public IntPtr dwExtraInfo;
-        }
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -2411,114 +2367,12 @@ namespace AgentIsland
                 return;
             }
 
+            Log("FocusAntigravity OK | hwnd=0x" + targetHwnd.ToInt64().ToString("X")
+                + " | session=" + (targetSession.SessionName ?? targetSession.Project ?? "")
+                + " (safe focus-only, zero synthetic keystrokes)");
             ArchiveAndRemoveSession(focusId);
             UpdateTrayTooltip();
             PushStateToUi(false, null);
-            JumpToAntigravityConversation(targetHwnd, targetSession);
-        }
-
-        private async void JumpToAntigravityConversation(IntPtr targetHwnd, SessionItem session)
-        {
-            if (targetHwnd == IntPtr.Zero || session == null) return;
-
-            string query = ResolveSearchQuery(session.SessionName, session.LastUserInput, session.TranscriptPath, session.SearchQuery, session.Summary);
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                Log("JumpConversation: empty search query, focused window only");
-                return;
-            }
-
-            Log("JumpConversation START | hwnd=0x" + targetHwnd.ToInt64().ToString("X") + " | query=" + query);
-
-            bool hadTextClipboard = false;
-            string savedClipboard = null;
-            try
-            {
-                if (Clipboard.ContainsText())
-                {
-                    hadTextClipboard = true;
-                    savedClipboard = Clipboard.GetText();
-                }
-            }
-            catch { }
-
-            try
-            {
-                await Task.Delay(90);
-                // Guard: only send keys if Antigravity window actually took foreground
-                IntPtr fgNow = GetForegroundWindow();
-                uint fgPid, targetPid;
-                GetWindowThreadProcessId(fgNow, out fgPid);
-                GetWindowThreadProcessId(targetHwnd, out targetPid);
-                if (fgPid != targetPid)
-                {
-                    Log("JumpConversation ABORT: foreground pid mismatch (" + fgPid + " != " + targetPid + ")");
-                    return;
-                }
-
-                // 1. Ctrl + K -> open Antigravity Conversation Picker
-                SendChord(VK_CONTROL, VK_K);
-                await Task.Delay(210);
-
-                // 2. Paste unique session phrase via clipboard (Unicode & IME safe)
-                Clipboard.SetText(query);
-                SendChord(VK_CONTROL, VK_V);
-                await Task.Delay(340);
-
-                // 3. Enter -> switch directly to matched conversation
-                SendSingleKey(VK_RETURN);
-                await Task.Delay(140);
-                Log("JumpConversation SENT Ctrl+K -> Paste -> Enter");
-            }
-            catch (Exception ex)
-            {
-                Log("JumpConversation ERROR: " + ex.Message);
-            }
-            finally
-            {
-                // Restore user's original clipboard text cleanly
-                if (hadTextClipboard && savedClipboard != null)
-                {
-                    try { Clipboard.SetText(savedClipboard); } catch { }
-                }
-            }
-        }
-
-        private static void SendChord(ushort modVk, ushort keyVk)
-        {
-            var inputs = new INPUT[4];
-            inputs[0] = MakeKeyInput(modVk, false);
-            inputs[1] = MakeKeyInput(keyVk, false);
-            inputs[2] = MakeKeyInput(keyVk, true);
-            inputs[3] = MakeKeyInput(modVk, true);
-            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
-        }
-
-        private static void SendSingleKey(ushort vk)
-        {
-            var inputs = new INPUT[2];
-            inputs[0] = MakeKeyInput(vk, false);
-            inputs[1] = MakeKeyInput(vk, true);
-            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
-        }
-
-        private static INPUT MakeKeyInput(ushort vk, bool keyUp)
-        {
-            return new INPUT
-            {
-                type = INPUT_KEYBOARD,
-                U = new InputUnion
-                {
-                    ki = new KEYBDINPUT
-                    {
-                        wVk = vk,
-                        wScan = 0,
-                        dwFlags = keyUp ? KEYEVENTF_KEYUP : 0,
-                        time = 0,
-                        dwExtraInfo = IntPtr.Zero
-                    }
-                }
-            };
         }
 
         // ==================== Settings & External Actions Persistence ====================
@@ -2662,6 +2516,11 @@ namespace AgentIsland
                 string genericBlocked = ResolveSearchQuery("", "", "", "", "正在执行任务");
                 record("search_query_extraction", extractedQ == "Help debug Cloudflare Wo" && titleQ == "灵动岛" && genericBlocked == "",
                     "shortFallback=" + extractedQ + " | titleFirst=" + titleQ + " | genericBlocked=" + (genericBlocked == ""));
+
+                // Guardrail: verify zero synthetic SendInput keystroke injection exists on this host
+                bool noSendInputMethod = typeof(IslandForm).GetMethod("SendInput", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public) == null
+                    && typeof(IslandForm).GetMethod("JumpToAntigravityConversation", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public) == null;
+                record("safe_focus_zero_key_injection", noSendInputMethod, "noSendInput=" + noSendInputMethod);
 
                 // 2.5 Test Auto-Dismiss when Antigravity annotation shows user viewed the conversation
                 string fakeAnn = Path.Combine(_selfTestDir, "viewed-conv.pbtxt");

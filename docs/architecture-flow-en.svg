@@ -99,7 +99,7 @@
   <text x="652" y="240" font-size="9.5" font-weight="600" fill="#4ade80">✓ Zero-bounce hover · Protected from AI</text>
 
   <rect x="640" y="258" width="256" height="68" rx="10" fill="#0d1117" stroke="rgba(245,158,11,0.65)" stroke-width="1.3" />
-  <text x="652" y="277" font-size="11.5" font-weight="700" fill="#f0f6fc">Zero-Flicker Session Jump</text>
+  <text x="652" y="277" font-size="11.5" font-weight="700" fill="#f0f6fc">Zero-Keystroke Safe Focus</text>
   <text x="652" y="294" font-size="10" fill="#8b949e">• IsIconic guard (no maximized resize flash)</text>
-  <text x="652" y="310" font-size="10" fill="#fbbf24">• Real title Ctrl+K jump (blocks placeholders)</text>
+  <text x="652" y="310" font-size="10" fill="#fbbf24">• Zero SendInput (never hijacks approval UI)</text>
 </svg>

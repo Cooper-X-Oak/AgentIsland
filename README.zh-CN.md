@@ -104,7 +104,7 @@ cd AgentIsland
 
 | AI 终端 | 状态 | 一键接入 |
 | :--- | :---: | :--- |
-| **Google Antigravity**（Hooks + `transcript.jsonl` 审批卡点雷达 + `Ctrl+K` 精准直达会话） | 已真机验证 | `.\adapters\antigravity\install.ps1` |
+| **Google Antigravity**（Hooks + `transcript.jsonl` 审批卡点雷达 + 零按键无抖动安全切窗） | 已真机验证 | `.\adapters\antigravity\install.ps1` |
 | **Claude Code**（`UserPromptSubmit` / `PermissionRequest` / `Notification` / `Stop` Hooks） | 契约已测 | `.\adapters\claude-code\install.ps1` |
 | **Codex CLI**（`~/.codex/hooks.json` 原生钩子 + 旧版 `notify` + `island-push.exe`） | 契约已测 | `.\adapters\codex-cli\install.ps1` |
 | **Cursor / Windsurf / Cline / OpenCode** | 规划中 | 欢迎 PR！见 [`CONTRIBUTING.md`](CONTRIBUTING.md) |
